@@ -120,6 +120,51 @@ test('administrator creates and edits a tenant user through the form', async ({ 
   await api(request, `admin/users/${login}`, 'DELETE');
 });
 
+test('the user edit form keeps what the administrator typed while the page finishes loading', async ({ page, request }) => {
+  // react-jhipster's ValidatedForm resets whenever the defaultValues reference changes. An object
+  // built inline changes on every render, so anything typed is discarded the moment the screen
+  // re-renders, and the submit then carries a mixture of typed and stored values. This screen
+  // fetches the cooperative list and the mail capability on mount, so it re-renders on its own
+  // moments after the record arrives, which is exactly when an administrator is typing.
+  const login = `browser-${crypto.randomUUID().slice(0, 8)}`;
+  await signIn(page, request);
+  await api(request, 'admin/users', 'POST', {
+    login,
+    email: `${login}@example.invalid`,
+    password,
+    // The developer identity belongs to the first cooperative; the second is SECONDARY_TENANT_ID.
+    tenantId: 1,
+    activated: true,
+    authorities: ['ROLE_USER'],
+  });
+
+  // Holding the cooperative list back makes that re-render happen at a known moment, after the
+  // typing below, rather than whenever the network happens to answer.
+  let release = () => {};
+  const held = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  await page.route('**/api/tenants', async route => {
+    await held;
+    await route.continue();
+  });
+
+  await page.goto(`/admin/user-management/${login}/edit`);
+  const lastName = page.locator('[name=lastName]');
+  const tenants = page.locator('[name=tenantId] option');
+  await expect(lastName).toBeVisible();
+  // The form is mounted while the cooperative list is still held, which is the window under test.
+  await expect(tenants).toHaveCount(0);
+  await lastName.fill('Typed before the page settled');
+
+  // Releasing the held response is the re-render that used to discard the field.
+  release();
+  await expect.poll(() => tenants.count()).toBeGreaterThan(0);
+  await expect(lastName).toHaveValue('Typed before the page settled');
+
+  await api(request, `admin/users/${login}`, 'DELETE');
+});
+
 test('monthly reports render actual persisted product quantities', async ({ page, request }) => {
   const name = `Synthetic report product ${crypto.randomUUID().slice(0, 8)}`,
     product = await api(request, 'uruns', 'POST', {

@@ -18,6 +18,22 @@ interface Identified {
  * loading notice exactly as before.
  */
 export function isEntityFormReady(entity: Identified | undefined, id: string | undefined, isNew: boolean): boolean {
+  return isEntityFormReadyFor(entity, 'id', id, isNew);
+}
+
+/**
+ * The same readiness test for a route keyed by something other than the numeric id, such as a login.
+ *
+ * The hazard is identical and the fix is the same: a form that mounts before its record arrives is
+ * mounted from whatever the slice last held, and any parent re-render discards what has been typed.
+ */
+export function isEntityFormReadyFor<T extends object>(
+  entity: T | undefined,
+  field: string,
+  routeKey: string | undefined,
+  isNew: boolean,
+): boolean {
   if (isNew) return true;
-  return entity?.id !== undefined && String(entity.id) === String(id);
+  const value = (entity as Record<string, unknown> | undefined)?.[field];
+  return value !== undefined && value !== null && String(value) === String(routeKey);
 }
