@@ -35,8 +35,18 @@ bun run build
 bun run test:migration  # Docker; isolated PostgreSQL with synthetic records
 bunx --no-install playwright install --with-deps chromium
 bun run test:browser
+bun run test:e2e
 bun audit --audit-level=high
 ```
+
+`bun run test:e2e` runs the deterministic Tester Army e2e smoke suite without model access. For the agentic journey, authenticate the e2e CLI once with your ChatGPT account and run the agent-tagged suite:
+
+```bash
+bun run e2e:login
+bun run test:e2e:agent
+```
+
+The e2e runner starts the disposable browser server itself, bootstraps the synthetic `developer` account, signs in through the UI, and saves an authenticated session for dependent tests. The agentic journey uses that session and natural-language navigation while deterministic assertions verify the final route.
 
 CI runs these checks without production secrets or deployment permissions. Persistence tests use actual Workerd/D1 behavior; browser journeys exercise the UI and API together. Playwright starts its own server on port 9071 and resets only `.wrangler/e2e`, a disposable local database separate from normal development. The browser workflow suite covers sales, debt collection, stock, expenses, transfers, and shift corrections using per-test synthetic tenants and disposable products. The Spring metrics regression now checks Cloudflare operations diagnostics. The bundled legacy schema fixture keeps PostgreSQL export verification independent of the original Spring repository.
 

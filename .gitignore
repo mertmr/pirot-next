@@ -5,6 +5,7 @@ dist/
 .dev.vars
 .env*
 !.env.example
+.e2e/
 .test-output/
 playwright-report/
 test-results/

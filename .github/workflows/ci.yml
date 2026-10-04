@@ -33,9 +33,12 @@ jobs:
       - run: bun run local:setup
       - run: bunx --no-install playwright install --with-deps chromium
       - run: bun run test:browser
+      - run: bun run test:e2e
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: browser-diagnostics
-          path: test-results/
+          path: |
+            test-results/
+            .e2e/
           retention-days: 7
