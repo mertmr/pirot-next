@@ -155,6 +155,48 @@ export async function drainOutboxes(env: Env) {
     }
   }
 }
+/**
+ * Retention for the tables that would otherwise grow without bound.
+ *
+ * An idempotency key only has to outlive a client's retry window, so a day is
+ * generous. A delivered outbox row is kept for a week so an operator can still
+ * confirm what was sent. The history table is the financial audit trail and is
+ * deliberately never pruned.
+ */
+const IDEMPOTENCY_RETENTION_MS = 24 * 60 * 60 * 1000;
+const OUTBOX_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Deletes expired tenant rows directly in D1.
+ *
+ * This deliberately bypasses the tenant SQL adapter: that adapter turns a single
+ * bulk DELETE into one statement per matching row, which would spend the
+ * per-invocation query budget on the maintenance task itself. Each cooperative
+ * here costs two statements regardless of how much it prunes, and every statement
+ * binds the tenant explicitly.
+ */
+export async function pruneTenantRetention(env: Env, at = Date.now()): Promise<void> {
+  const idempotencyBefore = new Date(at - IDEMPOTENCY_RETENTION_MS).toISOString(),
+    outboxBefore = new Date(at - OUTBOX_RETENTION_MS).toISOString();
+  const tenants = await env.DIRECTORY.prepare('SELECT id FROM tenants ORDER BY id').all<{ id: number }>();
+  for (const tenant of tenants.results) {
+    try {
+      await env.DIRECTORY.batch([
+        env.DIRECTORY.prepare('DELETE FROM business_idempotency WHERE tenant_id=? AND created_at<?').bind(tenant.id, idempotencyBefore),
+        env.DIRECTORY.prepare('DELETE FROM business_outbox WHERE tenant_id=? AND delivered_at IS NOT NULL AND delivered_at<?').bind(
+          tenant.id,
+          outboxBefore,
+        ),
+      ]);
+    } catch (error) {
+      console.error('Retention pruning failed', {
+        tenantId: tenant.id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+}
+
 export async function scheduleStockReports(env: Env, at = new Date()) {
   const day = istanbulDay(at.toISOString()),
     tomorrow = istanbulDay(new Date(at.getTime() + 86400000).toISOString());

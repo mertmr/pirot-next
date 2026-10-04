@@ -18,6 +18,7 @@ import { StokHareketiTipi } from 'app/shared/model/enumerations/stok-hareketi-ti
 import { convertDateTimeFromServer, convertDateTimeToServer, displayDefaultDateTime } from 'app/shared/util/date-utils';
 
 import { createEntity, getEntity, reset, updateEntity } from './stok-girisi.reducer';
+import { isEntityFormReady } from 'app/shared/util/entity-form';
 
 const NON_ADMIN_TIPIS = ['FIRE', 'STOK_DUZELTME'];
 
@@ -36,7 +37,7 @@ export const StokGirisiUpdate = () => {
   const users = useAppSelector(state => state.userManagement.users);
   const uruns = useAppSelector(state => state.urun.satisUrunleri);
   const stokGirisiEntity = useAppSelector(state => state.stokGirisi.entity);
-  const loading = useAppSelector(state => state.stokGirisi.loading);
+  const formReady = isEntityFormReady(stokGirisiEntity, id, isNew);
   const updating = useAppSelector(state => state.stokGirisi.updating);
   const updateSuccess = useAppSelector(state => state.stokGirisi.updateSuccess);
   const isAdmin = useAppSelector(state => hasAnyAuthority(state.authentication.account.authorities, [Authority.ADMIN]));
@@ -173,8 +174,8 @@ export const StokGirisiUpdate = () => {
       </Row>
       <Row className="justify-content-center">
         <Col md="8">
-          {loading ? (
-            <p>Loading...</p>
+          {!formReady ? (
+            <p>{translate('reports.common.loading')}</p>
           ) : (
             <ValidatedForm defaultValues={defaultValues} onSubmit={saveEntity}>
               {!isNew && (

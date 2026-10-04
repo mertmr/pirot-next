@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { CorrectionFields } from 'app/shared/financial/nobet-correction';
 import { IDuzeltmeTalebi } from 'app/shared/model/nobet-duzeltme.model';
 import Button from 'react-bootstrap/Button';
@@ -15,6 +15,7 @@ import { Hesap } from 'app/shared/model/enumerations/hesap.model';
 import { convertDateTimeFromServer, convertDateTimeToServer, displayDefaultDateTime } from 'app/shared/util/date-utils';
 
 import { createEntity, getEntity, reset, updateEntity } from './virman.reducer';
+import { isEntityFormReady } from 'app/shared/util/entity-form';
 
 export const VirmanUpdate = () => {
   const [closed, setClosed] = useState(false);
@@ -29,7 +30,7 @@ export const VirmanUpdate = () => {
 
   const users = useAppSelector(state => state.userManagement.users);
   const virmanEntity = useAppSelector(state => state.virman.entity);
-  const loading = useAppSelector(state => state.virman.loading);
+  const formReady = isEntityFormReady(virmanEntity, id, isNew);
   const updating = useAppSelector(state => state.virman.updating);
   const updateSuccess = useAppSelector(state => state.virman.updateSuccess);
   const hesapValues = Object.keys(Hesap);
@@ -75,18 +76,23 @@ export const VirmanUpdate = () => {
     }
   };
 
-  const defaultValues = () =>
-    isNew
-      ? {
-          tarih: displayDefaultDateTime(),
-        }
-      : {
-          cikisHesabi: 'KASA',
-          girisHesabi: 'KASA',
-          ...virmanEntity,
-          tarih: convertDateTimeFromServer(virmanEntity.tarih),
-          user: virmanEntity?.user?.id,
-        };
+  // Memoized identity matters: ValidatedForm resets the form whenever the
+  // defaultValues reference changes, so it must not be rebuilt on every render.
+  const defaultValues = useMemo(
+    () =>
+      isNew
+        ? {
+            tarih: displayDefaultDateTime(),
+          }
+        : {
+            cikisHesabi: 'KASA',
+            girisHesabi: 'KASA',
+            ...virmanEntity,
+            tarih: convertDateTimeFromServer(virmanEntity.tarih),
+            user: virmanEntity?.user?.id,
+          },
+    [isNew, virmanEntity],
+  );
 
   return (
     <div>
@@ -99,10 +105,10 @@ export const VirmanUpdate = () => {
       </Row>
       <Row className="justify-content-center">
         <Col md="8">
-          {loading ? (
-            <p>Loading...</p>
+          {!formReady ? (
+            <p>{translate('reports.common.loading')}</p>
           ) : (
-            <ValidatedForm defaultValues={defaultValues()} onSubmit={saveEntity}>
+            <ValidatedForm defaultValues={defaultValues} onSubmit={saveEntity}>
               {!isNew && (
                 <CorrectionFields type="virman" id={id} onChange={setDuzeltme} onBlocked={setCorrectionBlocked} onClosed={setClosed} />
               )}

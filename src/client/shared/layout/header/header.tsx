@@ -18,7 +18,6 @@ export interface IHeaderProps {
   isAdmin: boolean;
   ribbonEnv: string;
   isInProduction: boolean;
-  isOpenAPIEnabled: boolean;
   currentLocale: string;
 }
 
@@ -62,9 +61,7 @@ const Header = (props: IHeaderProps) => {
             <Home />
             {props.isAuthenticated && <EntitiesMenu isAdmin={props.isAdmin} />}
             {props.isAuthenticated && <ReportsMenu isAdmin={props.isAdmin} />}
-            {props.isAuthenticated && props.isAdmin && (
-              <AdminMenu showOpenAPI={props.isOpenAPIEnabled} showDatabase={!props.isInProduction} />
-            )}
+            {props.isAuthenticated && props.isAdmin && <AdminMenu />}
             <LocaleMenu currentLocale={props.currentLocale} onClick={handleLocaleChange} />
             <AccountMenu isAuthenticated={props.isAuthenticated} />
           </Nav>

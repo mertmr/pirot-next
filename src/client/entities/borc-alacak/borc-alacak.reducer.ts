@@ -55,15 +55,6 @@ export const updateEntity = createAsyncThunk(
   { serializeError: serializeAxiosError },
 );
 
-export const partialUpdateEntity = createAsyncThunk(
-  'borcAlacak/partial_update_entity',
-  async (entity: IBorcAlacak) => {
-    const result = await axios.patch<IBorcAlacak>(`${apiUrl}/${entity.id}`, cleanEntity(entity));
-    return result;
-  },
-  { serializeError: serializeAxiosError },
-);
-
 export const deleteEntity = createAsyncThunk(
   'borcAlacak/delete_entity',
   async (id: string | number) => {
@@ -107,7 +98,7 @@ export const BorcAlacakSlice = createEntitySlice({
           totalItems: parseInt(headers['x-total-count'], 10),
         };
       })
-      .addMatcher(isFulfilled(createEntity, updateEntity, partialUpdateEntity, collectPayment), (state, action) => {
+      .addMatcher(isFulfilled(createEntity, updateEntity, collectPayment), (state, action) => {
         state.updating = false;
         state.loading = false;
         state.updateSuccess = true;
@@ -118,7 +109,7 @@ export const BorcAlacakSlice = createEntitySlice({
         state.updateSuccess = false;
         state.loading = true;
       })
-      .addMatcher(isPending(createEntity, updateEntity, partialUpdateEntity, deleteEntity, collectPayment), state => {
+      .addMatcher(isPending(createEntity, updateEntity, deleteEntity, collectPayment), state => {
         state.errorMessage = null;
         state.updateSuccess = false;
         state.updating = true;

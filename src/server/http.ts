@@ -45,40 +45,6 @@ export async function handleApi(request: Request, env: Env, ctx?: ExecutionConte
     }
     if (!path.startsWith('/api/')) throw new BusinessError('notfound', 404);
     if (path.startsWith('/api/_internal/')) throw new BusinessError('notfound', 404);
-    if (path.startsWith('/api/admin/legacy-files')) {
-      admin(user);
-      if (env.BUSINESS_STORAGE !== 'durable' || !env.FILES) throw new BusinessError('notfound', 404);
-      const input = object(await request.json()),
-        tenantId = Number(input.tenantId);
-      if (!Number.isSafeInteger(tenantId) || tenantId <= 0) throw new BusinessError('invalidrequest');
-      if (path === '/api/admin/legacy-files/list') {
-        const result = await env.FILES.list({
-          prefix: `tenant/${tenantId}/reports/stock/`,
-          include: ['customMetadata'],
-          limit: 1000,
-          ...(input.cursor ? { cursor: text(input.cursor) } : {}),
-        });
-        return Response.json({
-          objects: result.objects.map(f => ({
-            key: f.key,
-            uploaded: f.uploaded.toISOString(),
-            size: f.size,
-            metadata: f.customMetadata ?? {},
-          })),
-          done: !result.truncated,
-          cursor: result.truncated ? result.cursor : null,
-        });
-      }
-      if (path === '/api/admin/legacy-files/get') {
-        const key = text(input.key);
-        if (!key.startsWith(`tenant/${tenantId}/reports/stock/`) || !/^tenant\/\d+\/reports\/stock\/[a-f0-9-]{36}\.xlsx$/.test(key))
-          throw new BusinessError('invalidrequest');
-        const file = await env.FILES.get(key);
-        if (!file) throw new BusinessError('notfound', 404);
-        return new Response(file.body, { headers: { 'content-type': 'application/octet-stream', 'cache-control': 'no-store' } });
-      }
-      throw new BusinessError('notfound', 404);
-    }
     if (path.startsWith('/api/admin/tenant-')) {
       admin(user);
       const body = object(await request.json());
@@ -92,13 +58,11 @@ export async function handleApi(request: Request, env: Env, ctx?: ExecutionConte
           ? `_internal/import/${action}`
           : path.startsWith('/api/admin/tenant-backup/') && ['begin', 'page', 'release'].includes(path.split('/').at(-1)!)
             ? `_internal/backup/${path.split('/').at(-1)}`
-            : path.startsWith('/api/admin/tenant-storage/') && ['freeze', 'page', 'unfreeze', 'retire'].includes(path.split('/').at(-1)!)
-              ? `_internal/storage/${path.split('/').at(-1)}`
-              : path === '/api/admin/tenant-export'
-                ? '_internal/snapshot'
-                : path === '/api/admin/tenant-reconciliation'
-                  ? '_internal/reconciliation'
-                  : null;
+            : path === '/api/admin/tenant-export'
+              ? '_internal/snapshot'
+              : path === '/api/admin/tenant-reconciliation'
+                ? '_internal/reconciliation'
+                : null;
       if (!endpoint) throw new BusinessError('notfound', 404);
       const members = await env.DIRECTORY.prepare(
         'SELECT id,login,first_name AS firstName,last_name AS lastName,email,tenant_id AS tenantId FROM users WHERE tenant_id=?',

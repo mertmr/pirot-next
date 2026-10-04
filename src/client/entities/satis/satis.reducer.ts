@@ -72,15 +72,6 @@ export const updateEntity = createAsyncThunk(
   { serializeError: serializeAxiosError },
 );
 
-export const partialUpdateEntity = createAsyncThunk(
-  'satis/partial_update_entity',
-  async (entity: ISatis) => {
-    const result = await axios.patch<ISatis>(`${apiUrl}/${entity.id}`, cleanEntity(entity));
-    return result;
-  },
-  { serializeError: serializeAxiosError },
-);
-
 export const deleteEntity = createAsyncThunk(
   'satis/delete_entity',
   async (input: string | number | { id: number; duzeltme?: import('app/shared/model/nobet-duzeltme.model').IDuzeltmeTalebi }) => {
@@ -119,7 +110,7 @@ export const SatisSlice = createEntitySlice({
           totalItems: parseInt(headers['x-total-count'], 10),
         };
       })
-      .addMatcher(isFulfilled(createEntity, createEntityWithNote, updateEntity, partialUpdateEntity), (state, action) => {
+      .addMatcher(isFulfilled(createEntity, createEntityWithNote, updateEntity), (state, action) => {
         state.updating = false;
         state.loading = false;
         state.updateSuccess = true;
@@ -130,7 +121,7 @@ export const SatisSlice = createEntitySlice({
         state.updateSuccess = false;
         state.loading = true;
       })
-      .addMatcher(isPending(createEntity, createEntityWithNote, updateEntity, partialUpdateEntity, deleteEntity), state => {
+      .addMatcher(isPending(createEntity, createEntityWithNote, updateEntity, deleteEntity), state => {
         state.errorMessage = null;
         state.updateSuccess = false;
         state.updating = true;

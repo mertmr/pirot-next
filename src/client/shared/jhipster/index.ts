@@ -7,13 +7,3 @@ export { getPaginationState } from 'react-jhipster-legacy/component/pagination/p
 export { ValidatedField, ValidatedForm, isEmail } from 'react-jhipster-legacy/form/validated-form';
 export { isNumber } from 'react-jhipster-legacy/util/number-utils';
 export { Storage } from './storage';
-export {
-  CacheMetrics,
-  DatasourceMetrics,
-  EndpointsRequestsMetrics,
-  GarbageCollectorMetrics,
-  HttpRequestMetrics,
-  JvmMemory,
-  JvmThreads,
-  SystemMetrics,
-} from 'react-jhipster-legacy/component/metrics';

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import Button from 'react-bootstrap/Button';
 import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
@@ -12,6 +12,7 @@ import { getUsers } from 'app/modules/administration/user-management/user-manage
 import { convertDateTimeFromServer, convertDateTimeToServer, displayDefaultDateTime } from 'app/shared/util/date-utils';
 
 import { createEntity, getEntity, reset, updateEntity } from './uretici.reducer';
+import { isEntityFormReady } from 'app/shared/util/entity-form';
 
 export const UreticiUpdate = () => {
   const dispatch = useAppDispatch();
@@ -23,7 +24,7 @@ export const UreticiUpdate = () => {
 
   const users = useAppSelector(state => state.userManagement.users);
   const ureticiEntity = useAppSelector(state => state.uretici.entity);
-  const loading = useAppSelector(state => state.uretici.loading);
+  const formReady = isEntityFormReady(ureticiEntity, id, isNew);
   const updating = useAppSelector(state => state.uretici.updating);
   const updateSuccess = useAppSelector(state => state.uretici.updateSuccess);
 
@@ -66,16 +67,21 @@ export const UreticiUpdate = () => {
     }
   };
 
-  const defaultValues = () =>
-    isNew
-      ? {
-          tarih: displayDefaultDateTime(),
-        }
-      : {
-          ...ureticiEntity,
-          tarih: convertDateTimeFromServer(ureticiEntity.tarih),
-          user: ureticiEntity?.user?.id,
-        };
+  // Memoized identity matters: ValidatedForm resets the form whenever the
+  // defaultValues reference changes, so it must not be rebuilt on every render.
+  const defaultValues = useMemo(
+    () =>
+      isNew
+        ? {
+            tarih: displayDefaultDateTime(),
+          }
+        : {
+            ...ureticiEntity,
+            tarih: convertDateTimeFromServer(ureticiEntity.tarih),
+            user: ureticiEntity?.user?.id,
+          },
+    [isNew, ureticiEntity],
+  );
 
   return (
     <div>
@@ -88,10 +94,10 @@ export const UreticiUpdate = () => {
       </Row>
       <Row className="justify-content-center">
         <Col md="8">
-          {loading ? (
-            <p>Loading...</p>
+          {!formReady ? (
+            <p>{translate('reports.common.loading')}</p>
           ) : (
-            <ValidatedForm defaultValues={defaultValues()} onSubmit={saveEntity}>
+            <ValidatedForm defaultValues={defaultValues} onSubmit={saveEntity}>
               {!isNew && (
                 <ValidatedField
                   name="id"

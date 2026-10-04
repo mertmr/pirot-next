@@ -59,7 +59,7 @@ export function page(
       .join(',');
   const total = store.count(kind, condition, bindings),
     pages = Math.max(1, Math.ceil(total / size));
-  const rows = store.sql
+  const raw = store.sql
     .exec<{ data: string }>(
       `SELECT e.data FROM entities e WHERE e.kind=? AND (${condition}) ORDER BY ${ordering},e.id ASC LIMIT ? OFFSET ?`,
       kind,
@@ -68,7 +68,8 @@ export function page(
       p * size,
     )
     .toArray()
-    .map(r => store.hydrate(kind, object(JSON.parse(r.data)) as Entity));
+    .map(r => object(JSON.parse(r.data)) as Entity);
+  const rows = store.hydrateAll(kind, raw);
   if (kind === 'stok-girisis')
     for (const row of rows) {
       row.urunAdi = row.urun ? object(row.urun).urunAdi : null;

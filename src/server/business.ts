@@ -36,6 +36,18 @@ const moneyFields = new Set([
   'bekleyenKasa',
 ]);
 const historicalFields = new Set(['nobetAcilisId', 'iptal', 'duzeltildi', 'acilisId', 'kapanisDokumu']);
+
+/**
+ * Parses a cooperative setting that is stored as text. An absent or unreadable value
+ * becomes zero, so introducing a rule can only ever narrow what the application allows.
+ */
+function configuredDecimal(raw: string): Decimal {
+  try {
+    return decimal(raw);
+  } catch {
+    return new Decimal(0);
+  }
+}
 interface FieldSpec {
   type: string;
   required: boolean;
@@ -222,9 +234,14 @@ export class BusinessService {
         q = integer(line.miktar, true);
       next.set(pid, (next.get(pid) ?? new Decimal(0)).plus(q));
     }
-    const products = new Map<number, Entity>();
-    for (const pid of [...new Set([...previous.keys(), ...next.keys()])].sort((a, b) => a - b)) {
-      const product = this.store.get('uruns', pid);
+    // One read covers every product the old and new lines touch, so the cost does not scale with
+    // the number of lines.
+    const touched = [...new Set([...previous.keys(), ...next.keys()])].sort((a, b) => a - b),
+      loaded = this.store.select('uruns', touched),
+      products = new Map<number, Entity>();
+    for (const pid of touched) {
+      const product = loaded.get(pid);
+      if (!product) throw new BusinessError('notfound', 404);
       if (next.has(pid) && product.active === false) throw new BusinessError('notfound', 404);
       if (product.musteriFiyati == null || decimal(product.musteriFiyati).lt(0)) throw new BusinessError('invalidamount');
       if (
@@ -242,7 +259,10 @@ export class BusinessService {
         ? new Decimal(100).minus(decimal(before.toplamTutar).times(100).div(subtotal).toDecimalPlaces(6)).clamp(0, 100)
         : new Decimal(0);
     }
-    if (discount.lt(0) || discount.gt(100) || (discount.gt(0) && this.actor.tenantId !== 2)) throw new BusinessError('invaliddiscount');
+    // The ceiling is read before parsing: a read that only D1 can satisfy is signalled by
+    // throwing, so the store call must stay out of the try in configuredDecimal.
+    const ceiling = configuredDecimal(this.store.setting('maxDiscountPercent', '0'));
+    if (discount.lt(0) || discount.gt(100) || discount.gt(ceiling)) throw new BusinessError('invaliddiscount');
     const sale: Entity = before ? clone(before) : this.newEntity('satis');
     sale.tarih = audit ? before!.tarih : date(request.tarih, before ? text(before.tarih) : undefined);
     sale.ortagaSatis = flag(request.ortagaSatis);
@@ -344,9 +364,17 @@ export class BusinessService {
     const audit = this.corrections.begin('satis', sale, intent, 'IPTAL');
     const reverse = this.saleCash(sale).negated();
     const lines = this.lines(id),
-      debt = this.debt(id);
-    for (const line of [...lines].sort((a, b) => refId(a.urun) - refId(b.urun)))
-      this.stock(this.store.get('uruns', refId(line.urun)), new Decimal(integer(line.miktar, true)));
+      debt = this.debt(id),
+      // Restoring stock touches one product per line; they are read together.
+      restored = this.store.select(
+        'uruns',
+        lines.map(line => refId(line.urun)),
+      );
+    for (const line of [...lines].sort((a, b) => refId(a.urun) - refId(b.urun))) {
+      const product = restored.get(refId(line.urun));
+      if (!product) throw new BusinessError('notfound', 404);
+      this.stock(product, new Decimal(integer(line.miktar, true)));
+    }
     if (audit) {
       sale.iptal = true;
       this.store.put('satis', sale);

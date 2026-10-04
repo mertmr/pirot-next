@@ -27,7 +27,7 @@ Run the smallest focused proof appropriate to the change. Financial, tenant, sec
 - `bun run test:migration` uses Docker and a bundled schema-only fixture with synthetic records.
 - `bun run test:browser` uses Playwright and synthetic local data.
 
-Ordered schema changes belong in `migrations/`. Do not weaken assertions, timeouts, checks, or security rules to make unrelated work pass. State exactly what was and was not verified. Record the PID of any background server you start and stop only that owned process.
+Ordered schema changes belong in `migrations/`. `src/server/d1-schema.ts` generates the business DDL from `ENTITY_SPECS`; `tests/schema.test.ts` asserts that generated DDL still matches `migrations/0003_business.sql`, so regenerate and update the migration together or that test fails. Do not weaken assertions, timeouts, checks, or security rules to make unrelated work pass. State exactly what was and was not verified. Record the PID of any background server you start and stop only that owned process.
 
 ## Repository hygiene
 

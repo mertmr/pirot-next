@@ -4,7 +4,7 @@ import React, { useEffect } from 'react';
 import Alert from 'react-bootstrap/Alert';
 import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
-import { Translate } from 'app/shared/jhipster/language';
+import { Translate, translate } from 'app/shared/jhipster/language';
 import { Link } from 'app/shared/routing/navigation';
 
 import { useAppDispatch, useAppSelector } from 'app/config/store';
@@ -33,7 +33,7 @@ export const Home = () => {
     <Row>
       <Col md="9">
         <h1 className="display-4">
-          <Translate contentKey="home.title">Welcome, Java Hipster!</Translate>
+          <Translate contentKey="home.title" />
         </h1>
         <p className="lead">
           <Translate contentKey="home.subtitle">This is your homepage</Translate>
@@ -46,10 +46,10 @@ export const Home = () => {
               </Translate>
             </Alert>
             <div className="dashboard-cards">
-              {renderDashboardCard('Kasa', dashboardReports.kasadaNeVar)}
-              {renderDashboardCard('Günlük Ciro', dashboardReports.gunlukCiro)}
-              {renderDashboardCard('Kartlı Satış', dashboardReports.kartliSatis)}
-              {renderDashboardCard('Nakit Satış', dashboardReports.nakitSatis)}
+              {renderDashboardCard(translate('home.cardCash'), dashboardReports.kasadaNeVar)}
+              {renderDashboardCard(translate('home.cardDailyRevenue'), dashboardReports.gunlukCiro)}
+              {renderDashboardCard(translate('home.cardCardSales'), dashboardReports.kartliSatis)}
+              {renderDashboardCard(translate('home.cardCashSales'), dashboardReports.nakitSatis)}
             </div>
           </div>
         ) : (

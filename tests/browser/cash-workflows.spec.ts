@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import {
   cash,
+  dec,
+  money,
   createProduct,
   createSale,
   debtsForSale,
@@ -30,7 +32,7 @@ test('a NAKIT expense moves cash by its amount on create, update and delete', as
     await page.waitForURL(/\/gider(\?|$)/, { timeout: 15_000 });
 
     giderId = (await findEntity<Gider>(request, 'giders', 'notlar', note)).id;
-    expect(await cash(request)).toBeCloseTo(cash0 - 100.5, 2);
+    expect(await cash(request)).toBe(money(dec(cash0).minus('100.5')));
     await expect(page.locator('tbody tr', { hasText: note })).toBeVisible();
 
     // Editing the amount reverses the old ledger effect before applying the new one.
@@ -39,15 +41,15 @@ test('a NAKIT expense moves cash by its amount on create, update and delete', as
     await page.locator('#gider-tutar').fill('40');
     await page.locator('#save-entity').click();
     await page.waitForURL(/\/gider(\?|$)/, { timeout: 15_000 });
-    expect(await cash(request)).toBeCloseTo(cash0 - 40, 2);
+    expect(await cash(request)).toBe(money(dec(cash0).minus('40')));
 
     await deleteThroughDialog(page, 'gider', giderId);
-    expect(await cash(request)).toBeCloseTo(cash0, 2);
+    expect(await cash(request)).toBe(cash0);
     giderId = undefined;
   } finally {
     if (giderId) await remove(request, 'giders', giderId);
   }
-  expect(await cash(request)).toBeCloseTo(cash0, 2);
+  expect(await cash(request)).toBe(cash0);
 });
 
 test('a BANKA expense never touches cash', async ({ page, request }) => {
@@ -64,15 +66,15 @@ test('a BANKA expense never touches cash', async ({ page, request }) => {
     await page.waitForURL(/\/gider(\?|$)/, { timeout: 15_000 });
 
     giderId = (await findEntity<Gider>(request, 'giders', 'notlar', note)).id;
-    expect(await cash(request)).toBeCloseTo(cash0, 2);
+    expect(await cash(request)).toBe(cash0);
 
     await deleteThroughDialog(page, 'gider', giderId);
-    expect(await cash(request)).toBeCloseTo(cash0, 2);
+    expect(await cash(request)).toBe(cash0);
     giderId = undefined;
   } finally {
     if (giderId) await remove(request, 'giders', giderId);
   }
-  expect(await cash(request)).toBeCloseTo(cash0, 2);
+  expect(await cash(request)).toBe(cash0);
 });
 
 test('a KASA to BANKA transfer is reversed when it is updated and deleted', async ({ page, request }) => {
@@ -90,7 +92,7 @@ test('a KASA to BANKA transfer is reversed when it is updated and deleted', asyn
     await page.waitForURL(/\/virman(\?|$)/, { timeout: 15_000 });
 
     virmanId = (await findEntity<Virman>(request, 'virmen', 'notlar', note)).id;
-    expect(await cash(request)).toBeCloseTo(cash0 - 75.25, 2);
+    expect(await cash(request)).toBe(money(dec(cash0).minus('75.25')));
 
     // Flipping the direction reverses the old effect before applying the new one.
     await page.goto(`/virman/${virmanId}/edit`, { waitUntil: 'domcontentloaded' });
@@ -99,15 +101,15 @@ test('a KASA to BANKA transfer is reversed when it is updated and deleted', asyn
     await page.locator('#virman-girisHesabi').selectOption('KASA');
     await page.locator('#save-entity').click();
     await page.waitForURL(/\/virman(\?|$)/, { timeout: 15_000 });
-    expect(await cash(request)).toBeCloseTo(cash0 + 75.25, 2);
+    expect(await cash(request)).toBe(money(dec(cash0).plus('75.25')));
 
     await deleteThroughDialog(page, 'virman', virmanId);
-    expect(await cash(request)).toBeCloseTo(cash0, 2);
+    expect(await cash(request)).toBe(cash0);
     virmanId = undefined;
   } finally {
     if (virmanId) await remove(request, 'virmen', virmanId);
   }
-  expect(await cash(request)).toBeCloseTo(cash0, 2);
+  expect(await cash(request)).toBe(cash0);
 });
 
 test('a KASA to KASA transfer is rejected without changing cash', async ({ page, request }) => {
@@ -125,7 +127,7 @@ test('a KASA to KASA transfer is rejected without changing cash', async ({ page,
   expect(response.status()).toBe(400);
   expect(((await response.json()) as { errorKey: string }).errorKey).toBe('invalidpayment');
   await expect(page).toHaveURL(/\/virman\/new/);
-  expect(await cash(request)).toBeCloseTo(cash0, 2);
+  expect(await cash(request)).toBe(cash0);
 });
 
 test('collecting a deferred payment from the debt list credits cash and settles the debt', async ({ page, request }) => {
@@ -140,7 +142,6 @@ test('collecting a deferred payment from the debt list credits cash and settles 
     const debt = debts[0];
     expect(debt.hareketTipi).toBe('BORC');
     expect(debt.odemeAraci).toBe('SONRA_ODEME');
-    const amount = Number(debt.tutar);
 
     await signIn(page, request);
     await page.goto('/borc-alacak', { waitUntil: 'domcontentloaded' });
@@ -161,7 +162,7 @@ test('collecting a deferred payment from the debt list credits cash and settles 
     await expect(row).toContainText('Nakit (Peşin)');
 
     // The server owns the cash and paid-state effects.
-    expect(await cash(request)).toBeCloseTo(cash0 + amount, 2);
+    expect(await cash(request)).toBe(money(dec(cash0).plus(String(debt.tutar))));
     const settled = await debtsForSale(request, saleId);
     expect(settled).toHaveLength(1);
     expect(settled[0].hareketTipi).toBe('ODEME');
@@ -173,6 +174,6 @@ test('collecting a deferred payment from the debt list credits cash and settles 
     await remove(request, 'satis', saleId);
     await remove(request, 'uruns', product.id);
   }
-  expect(await cash(request)).toBeCloseTo(cash0, 2);
+  expect(await cash(request)).toBe(cash0);
   expect(await stock(request, product.id)).toBe(stock0);
 });

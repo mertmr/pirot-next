@@ -74,7 +74,7 @@ export const UserManagementUpdate = () => {
       <Row className="justify-content-center">
         <Col md="8">
           {loading ? (
-            <p>Loading...</p>
+            <p>{translate('reports.common.loading')}</p>
           ) : (
             <>
               {error && <Alert variant="danger">{error}</Alert>}

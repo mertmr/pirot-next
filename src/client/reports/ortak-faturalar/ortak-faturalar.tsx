@@ -9,6 +9,7 @@ import { APP_DATE_FORMAT } from 'app/config/constants';
 import { IKisiler } from 'app/shared/model/kisiler.model';
 import { IReportDates } from 'app/shared/model/ortakfatura/report-dates.model';
 import CustomTextFormat from 'app/shared/util/CustomTextFormat';
+import { translate } from 'app/shared/jhipster/language';
 
 export const OrtakFaturalarPage = () => {
   const [reportDateList, setReportDateList] = useState<IReportDates[]>([]);
@@ -32,11 +33,11 @@ export const OrtakFaturalarPage = () => {
 
   return (
     <div>
-      <h2 id="OrtakFaturalar-page-heading">Ortak Faturalar</h2>
+      <h2 id="OrtakFaturalar-page-heading">{translate('reports.ortakFaturalar.title')}</h2>
       <Form.Group className="mb-3 col-12 col-md-4">
-        <Form.Label>Tarih</Form.Label>
+        <Form.Label>{translate('reports.ortakFaturalar.dateLabel')}</Form.Label>
         <Form.Select value={reportDate} onChange={changeReportDate}>
-          <option value="">Tarih seçiniz</option>
+          <option value="">{translate('reports.common.selectDate')}</option>
           {reportDateList.map(item => (
             <option key={item.reportDate} value={item.reportDate}>
               {item.reportDate}
@@ -78,7 +79,7 @@ export const OrtakFaturalarPage = () => {
           </tbody>
         </Table>
       ) : (
-        <div className="alert alert-warning">Kayıt bulunamadı.</div>
+        <div className="alert alert-warning">{translate('reports.common.notFound')}</div>
       )}
     </div>
   );

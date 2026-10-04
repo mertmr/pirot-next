@@ -6,6 +6,8 @@ import {
   cash,
   createProduct,
   createSale,
+  dec,
+  money,
   registerUser,
   sale,
   signIn,
@@ -139,8 +141,8 @@ test('closed sale cancellation defers cash until confirmed settlement and preser
   const cancelled = page.waitForResponse(r => r.url().includes(`/api/satis/${created.id}`) && r.request().method() === 'DELETE');
   await cancel.click();
   expect((await cancelled).status()).toBe(204);
-  expect(await cash(request, token)).toBeCloseTo(baseline + 100, 2);
-  expect(await stock(request, product.id, token)).toBe(5);
+  expect(await cash(request, token)).toBe(money(dec(baseline).plus('100')));
+  expect(await stock(request, product.id, token)).toBe('5');
   expect((await sale(request, created.id, token)).iptal).toBe(true);
 
   // Settle the deferred refund from the shift that was open when the sale closed.
@@ -151,7 +153,7 @@ test('closed sale cancellation defers cash until confirmed settlement and preser
   await page.getByRole('button', { name: 'Evet, nakit teslim edildi', exact: true }).click();
   expect((await settled).status()).toBe(200);
   await expect(page.getByRole('button', { name: 'Nakit ödemesini işle', exact: true })).toHaveCount(0);
-  expect(await cash(request, token)).toBeCloseTo(baseline, 2);
+  expect(await cash(request, token)).toBe(baseline);
 
   const originalAfter = await api<Record<string, unknown>>(request, `nobet-hareketleris/${closing.id}`, { token });
   for (const field of ['kasa', 'pirot', 'fark', 'farkDenge', 'acilisId', 'kapanisDokumu']) {
@@ -160,7 +162,7 @@ test('closed sale cancellation defers cash until confirmed settlement and preser
 
   const currentClosing = await shift(request, token, 'KAPANIS', fixture);
   expect(currentClosing.acilisId).toBe(opening.id);
-  expect(Number(currentClosing.kasa)).toBeCloseTo(baseline, 2);
+  expect(currentClosing.kasa).toBe(baseline);
   expect(currentClosing.fark).toBe('0.00');
 
   const audits = await api<Array<Record<string, unknown>>>(request, `nobet-duzeltmeler/nobet/${currentClosing.id}`, { token });

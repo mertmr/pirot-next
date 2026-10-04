@@ -3,6 +3,7 @@ import Table from 'react-bootstrap/Table';
 import axios from 'axios';
 
 import { IAylikSatislarMali, defaultValue } from 'app/shared/model/aylis-satislar-mali.model';
+import { translate } from 'app/shared/jhipster/language';
 
 export const AylikSatisMalilarsPage = () => {
   const [rapor, setRapor] = useState<IAylikSatislarMali>(defaultValue);
@@ -17,12 +18,12 @@ export const AylikSatisMalilarsPage = () => {
 
   return (
     <div>
-      <h2 id="aylikSatisMalilars-page-heading">Aylık Satışlar</h2>
+      <h2 id="aylikSatisMalilars-page-heading">{translate('reports.aylikSalesCost.title')}</h2>
       {tarihler.length > 0 ? (
         <Table striped responsive>
           <thead>
             <tr>
-              <th>Ürünler</th>
+              <th>{translate('reports.aylikSalesCost.columnProducts')}</th>
               {tarihler.map(tarih => (
                 <th key={tarih}>{tarih.slice(0, 7)}</th>
               ))}
@@ -41,7 +42,7 @@ export const AylikSatisMalilarsPage = () => {
           </tbody>
         </Table>
       ) : (
-        <div className="alert alert-warning">Kayıt bulunamadı.</div>
+        <div className="alert alert-warning">{translate('reports.common.notFound')}</div>
       )}
     </div>
   );

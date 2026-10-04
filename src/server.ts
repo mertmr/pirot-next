@@ -1,7 +1,7 @@
 import { deliverQueuedJob } from './server/delivery';
 import handler from '@tanstack/react-start/server-entry';
 import { handleApi } from './server/http';
-import { drainOutboxes, scheduleStockReports } from './server/jobs';
+import { drainOutboxes, pruneTenantRetention, scheduleStockReports } from './server/jobs';
 import { object } from './server/value';
 import type { Env } from './server/env';
 export { CooperativeTenant } from './server/tenant';
@@ -14,6 +14,7 @@ export default {
   async scheduled(_event: ScheduledController, env: Env) {
     await scheduleStockReports(env);
     await drainOutboxes(env);
+    await pruneTenantRetention(env);
   },
   async queue(batch: MessageBatch, env: Env) {
     for (const message of batch.messages) {

@@ -4,7 +4,7 @@
   "main": "src/server.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
-  "triggers": { "crons": ["* * * * *"] },
+  "triggers": { "crons": ["*/15 * * * *"] },
   "observability": { "enabled": true },
   "vars": { "ENVIRONMENT": "production", "PUBLIC_URL": "https://pirot.example.invalid" },
   "durable_objects": {
@@ -32,7 +32,6 @@
       "name": "pirot-cloudflare-staging",
       "vars": {
         "ENVIRONMENT": "staging",
-        "BUSINESS_STORAGE": "d1",
         "PUBLIC_URL": "https://pirot-cloudflare-staging.mertmr.workers.dev",
         "EMAIL_FROM": "pirot@pirot.io",
         "EMAIL_ENABLED": "false",

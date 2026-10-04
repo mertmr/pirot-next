@@ -1,4 +1,3 @@
-import { TABLES } from './d1-schema';
 import { operationDate, operationId } from './operation-context';
 import { D1TenantSql, d1Transaction } from './d1-store';
 import { outboundEmailEnabled } from './email-policy';
@@ -71,16 +70,13 @@ class TenantHandler {
     const result = this.store.transaction(() => {
       this.store.assertTenant(actor);
       const members = request.headers.get('x-pirot-members');
-      if (members)
-        for (const member of list(JSON.parse(members))) {
-          const user = object(member);
-          if (user.tenantId !== actor.tenantId) throw new BusinessError('forbidden', 403);
-          this.store.sql.exec(
-            'INSERT INTO users_snapshot(id,data) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data',
-            integer(user.id, true),
-            JSON.stringify(user),
-          );
-        }
+      // Internal jobs call the tenant with a synthetic system principal and no directory payload, so
+      // there is no member to snapshot for them. A real request always carries the directory list,
+      // which includes the caller.
+      this.store.syncUsers(
+        members ? list(JSON.parse(members)).map(object) : actor.id > 0 ? [actor as unknown as JsonObject] : [],
+        actor.tenantId,
+      );
       if (key && recordIdempotency) {
         const old = this.store.sql
           .exec<{ fingerprint: string; response: string }>('SELECT fingerprint,response FROM idempotency WHERE key=?', `${actor.id}:${key}`)
@@ -112,45 +108,6 @@ class TenantHandler {
       shifts = new Shifts(this.store, actor),
       reports = new Reports(this.store);
     const request = () => object(body);
-    if (path.startsWith('_internal/storage/')) {
-      if (!actor.authorities.includes('ROLE_ADMIN')) throw new BusinessError('forbidden', 403);
-      if (this.env.BUSINESS_STORAGE !== 'durable') throw new BusinessError('invalidtransition', 409);
-      const action = parts[2];
-      if (action === 'freeze' && method === 'POST') {
-        this.store.sql.exec(
-          "INSERT INTO tenant_meta(key,value) VALUES ('storage_frozen','true') ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-        );
-        return { data: { frozen: true } };
-      }
-      if (action === 'unfreeze' && method === 'POST') {
-        this.store.sql.exec("DELETE FROM tenant_meta WHERE key='storage_frozen'");
-        return { data: { frozen: false } };
-      }
-      if (action === 'page' && method === 'POST') {
-        const table = text(request().table),
-          offset = integer(request().offset ?? 0);
-        if (!Object.hasOwn(TABLES, table) || offset < 0) throw new BusinessError('invalidrequest');
-        if (!this.store.sql.exec("SELECT value FROM tenant_meta WHERE key='storage_frozen'").toArray().length)
-          throw new BusinessError('invalidtransition', 409);
-        const spec = TABLES[table];
-        // Backup tables were added lazily in the old storage version.
-        if (table.startsWith('backup_'))
-          this.store.sql.exec(
-            'CREATE TABLE IF NOT EXISTS backup_runs(id TEXT PRIMARY KEY,created_at TEXT NOT NULL,metadata TEXT NOT NULL); CREATE TABLE IF NOT EXISTS backup_records(run_id TEXT NOT NULL,section TEXT NOT NULL,ordinal INTEGER NOT NULL,data TEXT NOT NULL,PRIMARY KEY(run_id,section,ordinal));',
-          );
-        const rows = this.store.sql
-          .exec(`SELECT ${spec.columns.join(',')} FROM ${table} ORDER BY ${spec.keys.join(',')} LIMIT 200 OFFSET ?`, offset)
-          .toArray();
-        return { data: { rows: rows as unknown as JsonValue, next: offset + rows.length, done: rows.length < 200 } };
-      }
-      throw new BusinessError('notfound', 404);
-    }
-    if (
-      this.env.BUSINESS_STORAGE === 'durable' &&
-      method !== 'GET' &&
-      this.store.sql.exec("SELECT value FROM tenant_meta WHERE key='storage_frozen'").toArray().length
-    )
-      throw new BusinessError('migrationinprogress', 503);
     const migration = new TenantMigration(this.store, actor);
     if (path.startsWith('_internal/import/')) return { data: migration.handle(parts[2], body ? request() : {}) };
     if (path === '_internal/reconciliation') {
@@ -193,9 +150,8 @@ class TenantHandler {
     }
     if ((path === '_internal/monthly-stock-report' || path === 'reports/stock-export') && method === 'POST') {
       if (path.startsWith('_internal') && !actor.authorities.includes('ROLE_SYSTEM')) throw new BusinessError('forbidden', 403);
-      const settingsRow = this.store.sql.exec<{ value: string }>("SELECT value FROM tenant_meta WHERE key='settings'").toArray()[0],
-        settings = settingsRow ? object(JSON.parse(settingsRow.value)) : null;
-      if (path.startsWith('_internal') && !settings?.stockReportEnabled) return { data: { skipped: true } };
+      const enabled = this.store.setting('stockReportEnabled') === 'true';
+      if (path.startsWith('_internal') && !enabled) return { data: { skipped: true } };
       const month = path.startsWith('_internal')
         ? text(request().month)
         : new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul', year: 'numeric', month: '2-digit' }).format(operationDate());
@@ -205,7 +161,7 @@ class TenantHandler {
         id,
         tenantId: actor.tenantId,
         month,
-        to: path.startsWith('_internal') && outboundEmailEnabled(this.env) ? (settings?.stockReportEmail ?? null) : null,
+        to: path.startsWith('_internal') && outboundEmailEnabled(this.env) ? this.store.setting('stockReportEmail') || null : null,
         products: this.store
           .all('uruns')
           .filter(p => p.active !== false)
@@ -243,22 +199,32 @@ class TenantHandler {
             databaseBytes: this.store.sql.databaseSize,
           },
         };
-      const row = this.store.sql.exec<{ value: string }>("SELECT value FROM tenant_meta WHERE key='settings'").toArray()[0];
-      if (method === 'GET') return { data: row ? object(JSON.parse(row.value)) : { stockReportEmail: '', stockReportEnabled: false } };
+      if (method === 'GET')
+        return {
+          data: {
+            stockReportEmail: this.store.setting('stockReportEmail'),
+            stockReportEnabled: this.store.setting('stockReportEnabled') === 'true',
+            maxDiscountPercent: this.store.setting('maxDiscountPercent', '0'),
+          },
+        };
       if (path === 'cooperative-settings' && method === 'PUT') {
         const input = request(),
-          email = text(input.stockReportEmail).trim();
+          email = text(input.stockReportEmail).trim(),
+          maxDiscountPercent = integer(input.maxDiscountPercent ?? 0);
         if (
           email.length > 254 ||
           (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) ||
-          (input.stockReportEnabled && outboundEmailEnabled(this.env) && !email)
+          (input.stockReportEnabled && outboundEmailEnabled(this.env) && !email) ||
+          maxDiscountPercent < 0 ||
+          maxDiscountPercent > 100
         )
           throw new BusinessError('invalidrequest');
-        const value = { stockReportEmail: email, stockReportEnabled: input.stockReportEnabled === true };
-        this.store.sql.exec(
-          "INSERT INTO tenant_meta(key,value) VALUES ('settings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-          JSON.stringify(value),
-        );
+        const value = {
+          stockReportEmail: email,
+          stockReportEnabled: input.stockReportEnabled === true,
+          maxDiscountPercent: String(maxDiscountPercent),
+        };
+        this.store.saveSettings(value);
         return { data: value };
       }
     }
@@ -571,53 +537,6 @@ class TenantHandler {
 
 export class CooperativeTenant extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
-    if (new URL(request.url).pathname === '/api/_internal/storage/retire' && request.method === 'POST') {
-      try {
-        const actor = object(JSON.parse(request.headers.get('x-pirot-principal') || 'null')) as unknown as CurrentUser;
-        if (
-          this.env.BUSINESS_STORAGE === 'durable' ||
-          !actor.authorities.includes('ROLE_ADMIN') ||
-          !Number.isSafeInteger(actor.tenantId) ||
-          actor.tenantId <= 0
-        )
-          throw new BusinessError('forbidden', 403);
-        const proof = await this.env.DIRECTORY.prepare(
-          "SELECT value FROM business_tenant_meta WHERE tenant_id=? AND key='migration_storage_proof'",
-        )
-          .bind(actor.tenantId)
-          .first<string>('value');
-        if (!proof) throw new BusinessError('invalidtransition', 409);
-        const tables = this.ctx.storage.sql
-          .exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table' AND name='tenant_meta'")
-          .toArray();
-        if (!tables.length) return Response.json({ retired: true });
-        if (!this.ctx.storage.sql.exec("SELECT value FROM tenant_meta WHERE key='storage_frozen'").toArray().length)
-          throw new BusinessError('invalidtransition', 409);
-        const expected = object(JSON.parse(proof));
-        const digest = async (value: unknown) =>
-          Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value)))))
-            .map(byte => byte.toString(16).padStart(2, '0'))
-            .join('');
-        for (const table of ['entities', 'history']) {
-          const spec = TABLES[table],
-            rows = this.ctx.storage.sql.exec(`SELECT ${spec.columns.join(',')} FROM ${table} ORDER BY ${spec.keys.join(',')}`).toArray();
-          if ((await digest(rows)) !== expected[table]) throw new BusinessError('reconciliationfailed', 409);
-        }
-        await this.ctx.storage.deleteAll();
-        return Response.json({ retired: true });
-      } catch (error) {
-        return errorResponse(error, request);
-      }
-    }
-    if (this.env.BUSINESS_STORAGE === 'durable') {
-      const store = new TenantStore(this.ctx.storage.sql, this.ctx.storage, outboundEmailEnabled(this.env));
-      store.transaction(() => store.initialize());
-      try {
-        return await new TenantHandler(store, this.env).fetch(request);
-      } catch (error) {
-        return errorResponse(error, request);
-      }
-    }
     try {
       const actor = object(JSON.parse(request.headers.get('x-pirot-principal') || 'null')) as unknown as CurrentUser;
       if (

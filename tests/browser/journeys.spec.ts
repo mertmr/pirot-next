@@ -1,10 +1,10 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
-import { signIn } from './helpers';
-const password = 'Synthetic-local-password-42';
+import { DEVELOPER, signIn } from './helpers';
+const password = DEVELOPER.password;
 let cachedToken: string;
 async function token(request: APIRequestContext) {
   if (cachedToken) return cachedToken;
-  const response = await request.post('/api/authenticate', { data: { username: 'developer', password } });
+  const response = await request.post('/api/authenticate', { data: { username: DEVELOPER.username, password } });
   expect(response.ok()).toBeTruthy();
   return (cachedToken = (await response.json()).id_token as string);
 }

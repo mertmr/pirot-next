@@ -11,6 +11,7 @@ import { APP_LOCAL_DATE_FORMAT } from 'app/config/constants';
 import { ICiro } from 'app/shared/model/ciro.model';
 import CustomTextFormat from 'app/shared/util/CustomTextFormat';
 import { ITEMS_PER_PAGE } from 'app/shared/util/pagination.constants';
+import { translate } from 'app/shared/jhipster/language';
 
 const previousMonth = () => {
   const now = new Date();
@@ -53,14 +54,14 @@ export const CirosPage = () => {
 
   return (
     <div>
-      <h2 id="ciros-page-heading">Ciro</h2>
+      <h2 id="ciros-page-heading">{translate('reports.ciro.title')}</h2>
       <Row className="g-3 mb-3">
         <Form.Group className="col-md-6">
-          <Form.Label>Başlangıç Tarihi</Form.Label>
+          <Form.Label>{translate('reports.ciro.startDate')}</Form.Label>
           <Form.Control type="date" value={fromDate} onChange={event => setFromDate(event.target.value)} />
         </Form.Group>
         <Form.Group className="col-md-6">
-          <Form.Label>Bitiş Tarihi</Form.Label>
+          <Form.Label>{translate('reports.ciro.endDate')}</Form.Label>
           <Form.Control type="date" value={toDate} onChange={event => setToDate(event.target.value)} />
         </Form.Group>
       </Row>
@@ -69,10 +70,10 @@ export const CirosPage = () => {
           <Table striped responsive>
             <thead>
               <tr>
-                <th>Tarih</th>
-                <th>Toplam Tutar</th>
-                <th>Kartlı Satış</th>
-                <th>Nakit Satış</th>
+                <th>{translate('reports.common.columnDate')}</th>
+                <th>{translate('reports.common.columnTotal')}</th>
+                <th>{translate('reports.ciro.columnCard')}</th>
+                <th>{translate('reports.ciro.columnCash')}</th>
                 <th />
               </tr>
             </thead>
@@ -111,7 +112,7 @@ export const CirosPage = () => {
           </Row>
         </>
       ) : (
-        <div className="alert alert-warning">Kayıt bulunamadı.</div>
+        <div className="alert alert-warning">{translate('reports.common.notFound')}</div>
       )}
     </div>
   );

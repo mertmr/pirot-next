@@ -8,6 +8,7 @@ import axios from 'axios';
 import { APP_LOCAL_DATE_FORMAT } from 'app/config/constants';
 import { ICiro } from 'app/shared/model/ciro.model';
 import CustomTextFormat from 'app/shared/util/CustomTextFormat';
+import { translate } from 'app/shared/jhipster/language';
 
 export const CiroDetail = () => {
   const { id } = useParams<'id'>();
@@ -22,16 +23,16 @@ export const CiroDetail = () => {
   return (
     <Row>
       <Col md="8">
-        <h2>Ciro Günlük Detayı</h2>
+        <h2>{translate('reports.ciro.detailTitle')}</h2>
         {ciros.length > 0 ? (
           <Table striped responsive>
             <thead>
               <tr>
-                <th>Nöbetçi</th>
-                <th>Tarih</th>
-                <th>Toplam Tutar</th>
-                <th>Kartlı Satış</th>
-                <th>Nakit Satış</th>
+                <th>{translate('reports.ciro.columnStaff')}</th>
+                <th>{translate('reports.common.columnDate')}</th>
+                <th>{translate('reports.common.columnTotal')}</th>
+                <th>{translate('reports.ciro.columnCard')}</th>
+                <th>{translate('reports.ciro.columnCash')}</th>
               </tr>
             </thead>
             <tbody>
@@ -49,7 +50,7 @@ export const CiroDetail = () => {
             </tbody>
           </Table>
         ) : (
-          <div className="alert alert-warning">Kayıt bulunamadı.</div>
+          <div className="alert alert-warning">{translate('reports.common.notFound')}</div>
         )}
       </Col>
     </Row>

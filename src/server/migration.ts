@@ -1,62 +1,23 @@
 import { operationDate } from './operation-context';
-import { createHash } from 'node:crypto';
 import { ENTITY_SPECS, type EntityKind } from './entity-specs';
 import { TenantStore } from './storage';
+import { buildManifest, canonical, checksum, HISTORY_FIELDS } from './reconciliation-contract';
 import { BusinessError, type JsonObject, type Entity, object, list, integer, text, decimal, date, refId } from './value';
 import type { CurrentUser } from './env';
-export function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (value !== null && typeof value === 'object')
-    return `{${Object.keys(value)
-      .sort()
-      .map(k => `${JSON.stringify(k)}:${canonical((value as Record<string, unknown>)[k])}`)
-      .join(',')}}`;
-  return JSON.stringify(value);
-}
-export function checksum(value: unknown): string {
-  return createHash('sha256').update(canonical(value)).digest('hex');
-}
+export { canonical, checksum };
+/**
+ * Loads the manifest from persisted rows. The shape of a reconciliation is defined
+ * once, in reconciliation-contract, so the importer and the build script cannot drift.
+ */
 export function reconciliation(store: TenantStore): JsonObject {
-  const kinds = Object.keys(ENTITY_SPECS) as EntityKind[],
-    counts: JsonObject = {},
-    digests: JsonObject = {};
-  for (const kind of kinds) {
-    const hash = createHash('sha256');
-    let count = 0;
-    for (const row of store.sql.exec<{ data: string }>('SELECT data FROM entities WHERE kind=? ORDER BY id', kind)) {
-      hash.update(canonical(JSON.parse(row.data))).update('\n');
-      count++;
-    }
-    counts[kind] = count;
-    digests[kind] = hash.digest('hex');
+  const entities = {} as Record<EntityKind, Entity[]>;
+  for (const kind of Object.keys(ENTITY_SPECS) as EntityKind[]) {
+    entities[kind] = [];
+    for (const row of store.sql.exec<{ data: string }>('SELECT data FROM entities WHERE kind=? ORDER BY id', kind))
+      entities[kind].push(object(JSON.parse(row.data)) as Entity);
   }
-  const cash = store.sql
-    .exec<{ data: string }>(
-      "SELECT data FROM entities WHERE kind='kasa-hareketleris' ORDER BY json_extract(data,'$.tarih') DESC,id DESC LIMIT 1",
-    )
-    .toArray()[0];
-  const sum = (kind: EntityKind, field: string, predicate: (e: Entity) => boolean = () => true) => {
-    let total = decimal('0');
-    for (const row of store.rows(kind)) if (predicate(row)) total = total.plus(decimal(row[field], '0'));
-    return total.toString();
-  };
-  const historyHash = createHash('sha256');
-  for (const row of store.sql.exec('SELECT kind,entity_id,actor,operation,before_json,after_json,at FROM history ORDER BY id'))
-    historyHash.update(canonical(row)).update('\n');
-  return {
-    historyDigest: historyHash.digest('hex'),
-    tenantId: store.tenantId(),
-    counts,
-    digests,
-    historyCount: store.sql.exec<{ n: number }>('SELECT count(*) AS n FROM history').one().n,
-    balances: {
-      stock: sum('uruns', 'stok'),
-      cash: cash ? (object(JSON.parse(cash.data)).kasaMiktar ?? null) : null,
-      sales: sum('satis', 'toplamTutar', e => !e.iptal),
-      deferred: sum('satis', 'toplamTutar', e => !!e.sonraOdeme && !e.odendi && !e.iptal),
-      producer: sum('uretici-odemeleris', 'tutar'),
-    },
-  };
+  const history = store.sql.exec<Record<string, string>>(`SELECT ${HISTORY_FIELDS.join(',')} FROM history ORDER BY id`).toArray();
+  return buildManifest(store.tenantId(), entities, history);
 }
 export class TenantMigration {
   constructor(

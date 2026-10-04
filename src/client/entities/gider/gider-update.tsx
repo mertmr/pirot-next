@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { CorrectionFields } from 'app/shared/financial/nobet-correction';
 import { IDuzeltmeTalebi } from 'app/shared/model/nobet-duzeltme.model';
 import Button from 'react-bootstrap/Button';
@@ -16,6 +16,7 @@ import { OdemeAraci } from 'app/shared/model/enumerations/odeme-araci.model';
 import { convertDateTimeFromServer, convertDateTimeToServer, displayDefaultDateTime } from 'app/shared/util/date-utils';
 
 import { createEntity, getEntity, reset, updateEntity } from './gider.reducer';
+import { isEntityFormReady } from 'app/shared/util/entity-form';
 
 export const GiderUpdate = () => {
   const [closed, setClosed] = useState(false);
@@ -30,7 +31,7 @@ export const GiderUpdate = () => {
 
   const users = useAppSelector(state => state.userManagement.users);
   const giderEntity = useAppSelector(state => state.gider.entity);
-  const loading = useAppSelector(state => state.gider.loading);
+  const formReady = isEntityFormReady(giderEntity, id, isNew);
   const updating = useAppSelector(state => state.gider.updating);
   const updateSuccess = useAppSelector(state => state.gider.updateSuccess);
   const giderTipiValues = Object.keys(GiderTipi);
@@ -77,18 +78,23 @@ export const GiderUpdate = () => {
     }
   };
 
-  const defaultValues = () =>
-    isNew
-      ? {
-          tarih: displayDefaultDateTime(),
-        }
-      : {
-          giderTipi: 'KARGO',
-          odemeAraci: 'NAKIT',
-          ...giderEntity,
-          tarih: convertDateTimeFromServer(giderEntity.tarih),
-          user: giderEntity?.user?.id,
-        };
+  // Memoized identity matters: ValidatedForm resets the form whenever the
+  // defaultValues reference changes, so it must not be rebuilt on every render.
+  const defaultValues = useMemo(
+    () =>
+      isNew
+        ? {
+            tarih: displayDefaultDateTime(),
+          }
+        : {
+            giderTipi: 'KARGO',
+            odemeAraci: 'NAKIT',
+            ...giderEntity,
+            tarih: convertDateTimeFromServer(giderEntity.tarih),
+            user: giderEntity?.user?.id,
+          },
+    [isNew, giderEntity],
+  );
 
   return (
     <div>
@@ -101,10 +107,10 @@ export const GiderUpdate = () => {
       </Row>
       <Row className="justify-content-center">
         <Col md="8">
-          {loading ? (
-            <p>Loading...</p>
+          {!formReady ? (
+            <p>{translate('reports.common.loading')}</p>
           ) : (
-            <ValidatedForm defaultValues={defaultValues()} onSubmit={saveEntity}>
+            <ValidatedForm defaultValues={defaultValues} onSubmit={saveEntity}>
               {!isNew && (
                 <CorrectionFields type="gider" id={id} onChange={setDuzeltme} onBlocked={setCorrectionBlocked} onClosed={setClosed} />
               )}

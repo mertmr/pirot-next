@@ -72,11 +72,12 @@ export class Reports {
       ...this.store.rows('virmen', "json_extract(data,'$.tarih')>=? AND json_extract(data,'$.tarih')<?", [start, end]),
     ].filter(inDay);
     return {
-      giderList: [...this.store.rows('giders', "json_extract(data,'$.tarih')>=? AND json_extract(data,'$.tarih')<?", [start, end])]
-        .filter(inDay)
-        .map(e => this.store.hydrate('giders', e)),
+      giderList: this.store.hydrateAll(
+        'giders',
+        [...this.store.rows('giders', "json_extract(data,'$.tarih')>=? AND json_extract(data,'$.tarih')<?", [start, end])].filter(inDay),
+      ),
       virman: transfers[0] ? this.store.hydrate('virmen', transfers[0]) : null,
-      virmanList: transfers.map(e => this.store.hydrate('virmen', e)),
+      virmanList: this.store.hydrateAll('virmen', transfers),
       dashboardReports: this.dashboard(day),
       nobetHareketleri: latest ? this.store.hydrate('nobet-hareketleris', latest) : null,
       acilisHareketi: opening ? this.store.hydrate('nobet-hareketleris', opening) : null,
@@ -240,7 +241,7 @@ export class Reports {
       aylikTukenmeHizi: monthly.toFixed(2),
       haftalikTukenmeHizi: monthly.div(4).toFixed(2),
       raporVeriOlcekSuresi: String(days),
-      stokGunluguList: lines.map(l => this.store.hydrate('satis-stok-hareketleris', l)),
+      stokGunluguList: this.store.hydrateAll('satis-stok-hareketleris', lines),
       urunFire: waste.toString(),
     };
   }
