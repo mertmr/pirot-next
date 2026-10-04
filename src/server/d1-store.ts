@@ -1,4 +1,4 @@
-import { ENTITY_TABLES, TABLES, type TableSpec } from './d1-schema';
+import { ENTITY_TABLES, MAX_BINDINGS, TABLES, type TableSpec } from './d1-schema';
 import type { EntityKind } from './entity-specs';
 import type { SqlCursor, SqlValue, TenantSql } from './sql-contract';
 import { BusinessError } from './value';
@@ -412,6 +412,111 @@ export class D1TenantSql implements TenantSql {
  * `reads` is one round trip to satisfy a suspended read, `writes` one committed batch.
  */
 export const queryStats = { reads: 0, writes: 0 };
+
+interface Group {
+  head: string;
+  tail: string;
+  width: number;
+  rows: SqlValue[][];
+  order: number;
+}
+interface DeleteGroup {
+  head: string;
+  constant: SqlValue[];
+  pinned: string;
+  ids: SqlValue[];
+  order: number;
+}
+function placeholders(rows: number, width: number): string {
+  const row = `(${new Array(width).fill('?').join(',')})`;
+  return new Array(rows).fill(row).join(',');
+}
+
+/**
+ * Collapses the writes to one table into a single statement.
+ *
+ * The per-invocation budget is charged per statement, not per round trip, and `writeRow` emits one
+ * statement per row, so a twenty-line sale paid four statements for every line and the reverse side
+ * of an edit paid one more per removed line. Buffering rows that share a table into a single `VALUES`
+ * list, or a run of key-pinned deletes into one `IN (...)` list, makes the cost track the number of
+ * tables a command touches instead of the number of rows it writes.
+ *
+ * Rows are grouped by target table rather than by adjacency, because a command interleaves them:
+ * line, product, line, product. That reorders statements relative to how the command issued them,
+ * which cannot change what is committed: every statement is a keyed write of a distinct primary key,
+ * `changes` has already collapsed each key to a single buffered write, and the tables carry no
+ * foreign keys to each other. Only a statement that is neither a keyed upsert nor a generated
+ * delete keeps its position, because the frozen-snapshot copy reads the rows around it.
+ */
+function compact(writes: Query[]): Query[] {
+  const out: Query[] = [];
+  const OPEN = ') VALUES';
+  let upserts: Group[] = [],
+    deletes: DeleteGroup[] = [];
+  const flush = () => {
+    out.push(
+      ...deletes
+        .sort((a, b) => a.order - b.order)
+        .map(group => ({
+          sql: `${group.head} IN (${group.ids.map(() => '?').join(',')})`,
+          bindings: [...group.constant, ...group.ids],
+        })),
+    );
+    out.push(
+      ...upserts
+        .sort((a, b) => a.order - b.order)
+        .map(group => ({ sql: `${group.head}${placeholders(group.rows.length, group.width)}${group.tail}`, bindings: group.rows.flat() })),
+    );
+    upserts = [];
+    deletes = [];
+  };
+  const pushUpsert = (head: string, tail: string, bindings: SqlValue[]) => {
+    const width = bindings.length,
+      existing = upserts.find(candidate => candidate.head === head && candidate.rows.length * candidate.width + width <= MAX_BINDINGS);
+    if (existing) {
+      existing.rows.push(bindings);
+      return;
+    }
+    // The table is already being written, so this row starts a second statement for it rather than
+    // growing the first past the bound-parameter limit. Both lists are rebound by `flush`, so the
+    // push below has to read them again rather than work from an array captured before it.
+    if (upserts.some(candidate => candidate.head === head)) flush();
+    upserts.push({ head, tail, width, rows: [bindings], order: upserts.length });
+  };
+  const pushDelete = (head: string, bindings: SqlValue[]) => {
+    const constant = bindings.slice(0, -1),
+      pinned = JSON.stringify(constant),
+      id = bindings[bindings.length - 1];
+    const existing = deletes.find(
+      candidate => candidate.head === head && candidate.pinned === pinned && candidate.ids.length + constant.length + 1 <= MAX_BINDINGS,
+    );
+    if (existing) {
+      existing.ids.push(id);
+      return;
+    }
+    if (deletes.some(candidate => candidate.head === head && candidate.pinned === pinned)) flush();
+    deletes.push({ head, constant, pinned, ids: [id], order: deletes.length });
+  };
+  for (const query of writes) {
+    const open = query.sql.indexOf(OPEN),
+      close = query.sql.indexOf(') ON CONFLICT');
+    if (open >= 0 && close >= 0) {
+      pushUpsert(query.sql.slice(0, open + OPEN.length), query.sql.slice(close + 1), query.bindings);
+      continue;
+    }
+    // A generated delete pins its key with `col=?` on every column, so all but the last value are
+    // shared by rows targeting the same table and only that last value varies per row.
+    const marker = query.sql.lastIndexOf('=?');
+    if (query.sql.startsWith('DELETE FROM ') && marker > 0 && marker === query.sql.length - 2) {
+      pushDelete(query.sql.slice(0, marker), query.bindings);
+      continue;
+    }
+    flush();
+    out.push(query);
+  }
+  flush();
+  return out;
+}
 export async function d1Transaction<T>(db: D1Database, tenantId: number, run: (sql: D1TenantSql) => Promise<T>): Promise<T> {
   const context = operationContext();
   await db.prepare('INSERT INTO business_versions(tenant_id,version) VALUES (?,0) ON CONFLICT(tenant_id) DO NOTHING').bind(tenantId).run();
@@ -439,13 +544,15 @@ export async function d1Transaction<T>(db: D1Database, tenantId: number, run: (s
         if (current === version) return result;
         break;
       }
-      const token = operationId();
+      const token = operationId(),
+        statements = compact(sql.writes);
       try {
-        queryStats.writes++;
+        // The version guard, the write guard, and the guard cleanup are statements in the batch too.
+        queryStats.writes += statements.length + 3;
         await db.batch([
           db.prepare('UPDATE business_versions SET version=version+1 WHERE tenant_id=? AND version=?').bind(tenantId, version),
           db.prepare('INSERT INTO business_write_guards(token,matched) VALUES (?,changes())').bind(token),
-          ...sql.writes.map(q => db.prepare(q.sql).bind(...q.bindings)),
+          ...statements.map(q => db.prepare(q.sql).bind(...q.bindings)),
           db.prepare('DELETE FROM business_write_guards WHERE token=?').bind(token),
         ]);
         return result;

@@ -31,7 +31,6 @@ export default {
       if (request.method === 'POST') {
         queryStats.reads = 0;
         queryStats.writes = 0;
-        queryStats.writes = 0;
         return new Response(null, { status: 204 });
       }
       return Response.json(queryStats);

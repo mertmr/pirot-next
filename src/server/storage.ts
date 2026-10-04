@@ -1,6 +1,7 @@
 import { operationDate, operationId } from './operation-context';
 import type { TenantSql, TransactionRunner, SqlValue } from './sql-contract';
 import { ENTITY_SPECS, type EntityKind } from './entity-specs';
+import { MAX_BINDINGS } from './d1-schema';
 import { BusinessError, type Entity, type JsonObject, object, integer, clone, refId } from './value';
 import type { CurrentUser } from './env';
 export const TENANT_SCHEMA_VERSION = 2;
@@ -30,8 +31,11 @@ interface Node {
   refs: Map<string, Ref>;
   expanded: boolean;
 }
-/** Relation reads are capped so one oversized batch cannot exceed the SQLite term limit. */
-const BATCH = 400;
+/**
+ * Relation reads are chunked so one oversized batch cannot exceed the bound-parameter limit. One
+ * slot is reserved because the entity reads also bind the row kind alongside the id list.
+ */
+const BATCH = MAX_BINDINGS - 1;
 export class TenantStore {
   /**
    * Rows this operation has already seen. A lookup that has been served once is served again from
@@ -237,15 +241,17 @@ export class TenantStore {
   syncUsers(members: JsonObject[], tenantId: number): void {
     if (!members.length) return;
     for (const member of members) if (member.tenantId !== tenantId) throw new BusinessError('forbidden', 403);
-    const current = new Map<number, string>(
-      this.sql
-        .exec<{ id: number; data: string }>(
-          `SELECT id,data FROM users_snapshot WHERE id IN (${members.map(() => '?').join(',')})`,
-          ...members.map(m => integer(m.id, true)),
-        )
-        .toArray()
-        .map(row => [row.id, row.data]),
-    );
+    const ids = members.map(m => integer(m.id, true)),
+      current = new Map<number, string>();
+    // Chunked for the same reason `batchRows` is: the member list is every user of the cooperative,
+    // so a large one would otherwise exceed the SQLite term limit and fail the whole request.
+    for (let start = 0; start < ids.length; start += BATCH) {
+      const chunk = ids.slice(start, start + BATCH);
+      for (const row of this.sql
+        .exec<{ id: number; data: string }>(`SELECT id,data FROM users_snapshot WHERE id IN (${chunk.map(() => '?').join(',')})`, ...chunk)
+        .toArray())
+        current.set(row.id, row.data);
+    }
     for (const member of members) {
       const id = integer(member.id, true),
         data = JSON.stringify(member);
@@ -284,10 +290,16 @@ export class TenantStore {
       attached: Node[][] = roots.map(() => []);
     if (kind === 'satis' && roots.length) {
       // One scan covers every sale in the batch, so a page of sales costs the same as one sale.
+      // Chunked because the caller decides the page size; a sale's lines all carry that sale's
+      // id, so a chunked scan still returns each sale's lines in `ORDER BY id`.
       const saleIds = roots.map(root => integer(root.value.id, true)),
-        lines = [
-          ...this.rows('satis-stok-hareketleris', `json_extract(data,'$.satis.id') IN (${saleIds.map(() => '?').join(',')})`, saleIds),
-        ];
+        lines: Entity[] = [];
+      for (let start = 0; start < saleIds.length; start += BATCH) {
+        const chunk = saleIds.slice(start, start + BATCH);
+        lines.push(
+          ...this.rows('satis-stok-hareketleris', `json_extract(data,'$.satis.id') IN (${chunk.map(() => '?').join(',')})`, chunk),
+        );
+      }
       roots.forEach((root, index) => {
         attached[index] = lines
           .filter(raw => refId(raw.satis) === saleIds[index])

@@ -262,7 +262,10 @@ export class BusinessService {
     // The ceiling is read before parsing: a read that only D1 can satisfy is signalled by
     // throwing, so the store call must stay out of the try in configuredDecimal.
     const ceiling = configuredDecimal(this.store.setting('maxDiscountPercent', '0'));
-    if (discount.lt(0) || discount.gt(100) || discount.gt(ceiling)) throw new BusinessError('invaliddiscount');
+    if (discount.lt(0) || discount.gt(100)) throw new BusinessError('invaliddiscount');
+    // Over the cooperative's own ceiling is a different failure from a malformed discount: it is
+    // resolved by an administrator changing a setting, not by the operator retyping the amount.
+    if (discount.gt(ceiling)) throw new BusinessError('discountlimit');
     const sale: Entity = before ? clone(before) : this.newEntity('satis');
     sale.tarih = audit ? before!.tarih : date(request.tarih, before ? text(before.tarih) : undefined);
     sale.ortagaSatis = flag(request.ortagaSatis);
