@@ -40,6 +40,12 @@ hundred-line sale measures 47 of 50 reads and statements together, and the suite
 
 A single statement cannot bind more than 100 parameters, so a relation read that spans more ids than that has to be split. The tenant rewrite binds one parameter per chunk of buffered JSON ahead of the caller's own, which makes the widest safe list a function of what the operation has already buffered. That count is read from the adapter (`TenantSql.deltaBindings`) rather than reserved as a fixed allowance: a guess that forgets either the row kind or a second buffered chunk fails an ordinary large sale with `too many SQL variables`, and the width that triggers it is reached by a normal cooperative. `tests/binding-budget.test.ts` covers the accounting, and `tests/read-budget.test.ts` covers a sale wider than one statement can bind.
 
+Four administration screens — configuration, documentation, logs and metrics — were removed because no
+server-side target was ever implemented for them, so every one of them failed to load rather than
+showing anything. Their routes, orphaned locale files and the Swagger UI asset and its menu entry went
+with them; that last one was working, so it is called out here rather than left to be discovered.
+Nothing else in the application referenced them.
+
 BCrypt and report compression use separate private stateless compute objects to preserve legacy hashes and fit the Free edge Worker CPU allowance. These objects store no application data. Moving away from Cloudflare requires replacing compute/binding adapters; persistent data can be recovered from one D1 SQL export.
 
 ## Preserved workflows
