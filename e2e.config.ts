@@ -1,6 +1,7 @@
 import type { E2EConfig } from 'e2e';
 import { web } from '@e2e-dev/web';
 import { chatgpt } from 'e2e/oauth/chatgpt';
+import { DEVELOPER_PASSWORD } from './tests/e2e/support';
 
 export default {
   tests: 'tests/e2e/**/*.e2e.ts',
@@ -29,7 +30,7 @@ export default {
   credentials: {
     developer: {
       username: 'developer',
-      password: process.env.PIROT_DEV_PASSWORD ?? 'Synthetic-local-password-42',
+      password: DEVELOPER_PASSWORD,
     },
   },
   agents: {

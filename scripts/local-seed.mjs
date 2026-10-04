@@ -1,12 +1,28 @@
 import { readFileSync } from 'node:fs';
+// Keep in sync with tests/e2e/support.ts readDevVars: tolerates CRLF,
+// comments, blank lines and quoted values instead of naive split('=').
 const vars = Object.fromEntries(
-  readFileSync('.dev.vars', 'utf8')
-    .split('\n')
-    .filter(Boolean)
-    .map(line => {
-      const i = line.indexOf('=');
-      return [line.slice(0, i), line.slice(i + 1)];
-    }),
+  (() => {
+    let text;
+    try {
+      text = readFileSync('.dev.vars', 'utf8');
+    } catch {
+      throw new Error('Missing .dev.vars; run bun run local:setup first');
+    }
+    return text
+      .split('\n')
+      .map(line => line.replace(/\r$/, '').trim())
+      .filter(line => line && !line.startsWith('#'))
+      .flatMap(line => {
+        const i = line.indexOf('=');
+        if (i <= 0) return [];
+        const key = line.slice(0, i).trim();
+        let value = line.slice(i + 1).trim();
+        if (value.length >= 2 && ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))))
+          value = value.slice(1, -1);
+        return key ? [[key, value]] : [];
+      });
+  })(),
 );
 const base = process.env.PIROT_LOCAL_URL ?? 'http://localhost:9070';
 if (!['localhost', '127.0.0.1'].includes(new URL(base).hostname)) throw new Error('Local seed accepts only localhost.');
