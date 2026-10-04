@@ -167,33 +167,46 @@ const IDEMPOTENCY_RETENTION_MS = 24 * 60 * 60 * 1000;
 const OUTBOX_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
+ * How many rows one pass deletes per table.
+ *
+ * Retention is a background task, so what it does per tick has to be bounded rather than
+ * proportional to whatever has accumulated. This comfortably carries the inflow between ticks: a
+ * day of sales for every cooperative, discarded a day later, across a tick that runs ninety-six times
+ * a day. Anything beyond it is worked down over successive ticks.
+ */
+const PRUNE_BATCH = 1000;
+
+/**
  * Deletes expired tenant rows directly in D1.
  *
- * This deliberately bypasses the tenant SQL adapter: that adapter turns a single
- * bulk DELETE into one statement per matching row, which would spend the
- * per-invocation query budget on the maintenance task itself. Each cooperative
- * here costs two statements regardless of how much it prunes, and every statement
- * binds the tenant explicitly.
+ * This deliberately bypasses the tenant SQL adapter, which turns a single bulk DELETE into one
+ * statement per matching row and would spend the maintenance task's whole budget on itself.
+ *
+ * It also does not iterate the tenant list. Binding a tenant per statement bought no isolation
+ * here: these are system maintenance statements run from the cron against the directory, already
+ * filtered on age. What it bought was a batch per cooperative, so the task cost a round trip per
+ * tenant on every tick, against the same fifty-query per-invocation allowance the query-budget work
+ * exists to respect. A deployment with a few dozen cooperatives would exceed it however little it
+ * had to delete, and the per-tenant catch could not help, because the limit is per invocation rather
+ * than per statement. A pass is now two statements whatever the tenant count.
+ *
+ * The rowid subquery is what bounds a pass. `migrations/0006_retention_prune_indexes.sql` indexes
+ * both age columns, which otherwise have no index to seek.
  */
 export async function pruneTenantRetention(env: Env, at = Date.now()): Promise<void> {
   const idempotencyBefore = new Date(at - IDEMPOTENCY_RETENTION_MS).toISOString(),
     outboxBefore = new Date(at - OUTBOX_RETENTION_MS).toISOString();
-  const tenants = await env.DIRECTORY.prepare('SELECT id FROM tenants ORDER BY id').all<{ id: number }>();
-  for (const tenant of tenants.results) {
-    try {
-      await env.DIRECTORY.batch([
-        env.DIRECTORY.prepare('DELETE FROM business_idempotency WHERE tenant_id=? AND created_at<?').bind(tenant.id, idempotencyBefore),
-        env.DIRECTORY.prepare('DELETE FROM business_outbox WHERE tenant_id=? AND delivered_at IS NOT NULL AND delivered_at<?').bind(
-          tenant.id,
-          outboxBefore,
-        ),
-      ]);
-    } catch (error) {
-      console.error('Retention pruning failed', {
-        tenantId: tenant.id,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
+  try {
+    await env.DIRECTORY.batch([
+      env.DIRECTORY.prepare(
+        'DELETE FROM business_idempotency WHERE rowid IN (SELECT rowid FROM business_idempotency WHERE created_at<? ORDER BY created_at LIMIT ?)',
+      ).bind(idempotencyBefore, PRUNE_BATCH),
+      env.DIRECTORY.prepare(
+        'DELETE FROM business_outbox WHERE rowid IN (SELECT rowid FROM business_outbox WHERE delivered_at IS NOT NULL AND delivered_at<? ORDER BY delivered_at LIMIT ?)',
+      ).bind(outboxBefore, PRUNE_BATCH),
+    ]);
+  } catch (error) {
+    console.error('Retention pruning failed', { error: error instanceof Error ? error.message : 'Unknown error' });
   }
 }
 
