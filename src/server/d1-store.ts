@@ -448,9 +448,11 @@ function placeholders(rows: number, width: number): string {
  * foreign keys to each other. Only a statement that is neither a keyed upsert nor a generated
  * delete keeps its position, because the frozen-snapshot copy reads the rows around it.
  */
-function compact(writes: Query[]): Query[] {
+export function compact(writes: Query[]): Query[] {
   const out: Query[] = [];
-  const OPEN = ') VALUES';
+  // Includes the trailing space so a group of one row is emitted byte-identically to the statement it
+  // replaces, which keeps a committed batch readable against the code that produced it.
+  const OPEN = ') VALUES ';
   let upserts: Group[] = [],
     deletes: DeleteGroup[] = [];
   const flush = () => {
@@ -472,7 +474,13 @@ function compact(writes: Query[]): Query[] {
   };
   const pushUpsert = (head: string, tail: string, bindings: SqlValue[]) => {
     const width = bindings.length,
-      existing = upserts.find(candidate => candidate.head === head && candidate.rows.length * candidate.width + width <= MAX_BINDINGS);
+      // Matched on the conflict clause as well as the column list. Today a table's column list
+      // determines its `ON CONFLICT` target, so the two cannot disagree — but the emitted SQL takes
+      // the clause from whichever query opened the group, so a table whose conflict target ever
+      // varied per row would write later rows under the wrong one.
+      existing = upserts.find(
+        candidate => candidate.head === head && candidate.tail === tail && candidate.rows.length * candidate.width + width <= MAX_BINDINGS,
+      );
     if (existing) {
       existing.rows.push(bindings);
       return;
@@ -480,7 +488,7 @@ function compact(writes: Query[]): Query[] {
     // The table is already being written, so this row starts a second statement for it rather than
     // growing the first past the bound-parameter limit. Both lists are rebound by `flush`, so the
     // push below has to read them again rather than work from an array captured before it.
-    if (upserts.some(candidate => candidate.head === head)) flush();
+    if (upserts.some(candidate => candidate.head === head && candidate.tail === tail)) flush();
     upserts.push({ head, tail, width, rows: [bindings], order: upserts.length });
   };
   const pushDelete = (head: string, bindings: SqlValue[]) => {
@@ -545,16 +553,18 @@ export async function d1Transaction<T>(db: D1Database, tenantId: number, run: (s
         break;
       }
       const token = operationId(),
-        statements = compact(sql.writes);
-      try {
-        // The version guard, the write guard, and the guard cleanup are statements in the batch too.
-        queryStats.writes += statements.length + 3;
-        await db.batch([
+        statements = compact(sql.writes),
+        batch = [
           db.prepare('UPDATE business_versions SET version=version+1 WHERE tenant_id=? AND version=?').bind(tenantId, version),
           db.prepare('INSERT INTO business_write_guards(token,matched) VALUES (?,changes())').bind(token),
           ...statements.map(q => db.prepare(q.sql).bind(...q.bindings)),
           db.prepare('DELETE FROM business_write_guards WHERE token=?').bind(token),
-        ]);
+        ];
+      try {
+        // Counted from the batch rather than as `statements.length + 3`, so the budget cannot drift
+        // from the statements actually sent when a guard is added or removed.
+        queryStats.writes += batch.length;
+        await db.batch(batch);
         return result;
       } catch (error) {
         if (error instanceof Error && /CHECK constraint failed: matched=1/.test(error.message)) break;
