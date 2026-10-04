@@ -9,7 +9,15 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const path = new URL(request.url).pathname;
     if (path.startsWith('/api/') || path.startsWith('/management/')) return handleApi(request, env, ctx);
-    return handler.fetch(request);
+    const response = await handler.fetch(request);
+    // The document shell must never be served stale: a cached post-deploy shell
+    // talking to a newer Worker is a broken login on a shared computer.
+    if ((response.headers.get('content-type') ?? '').includes('text/html')) {
+      const headers = new Headers(response.headers);
+      headers.set('cache-control', 'no-store');
+      return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+    }
+    return response;
   },
   async scheduled(_event: ScheduledController, env: Env) {
     await scheduleStockReports(env);

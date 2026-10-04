@@ -9,7 +9,8 @@
     },
     "messages": {
       "error": {
-        "authentication": "<strong>Failed to sign in!</strong> Please check your credentials and try again."
+        "authentication": "<strong>Failed to sign in!</strong> Please check your credentials and try again.",
+        "unreachable": "<strong>Could not reach the server!</strong> Check your connection, disable content blockers for this site, and try again."
       }
     },
     "password": {

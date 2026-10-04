@@ -10,6 +10,7 @@ export const Login = () => {
   const dispatch = useAppDispatch();
   const isAuthenticated = useAppSelector(state => state.authentication.isAuthenticated);
   const loginError = useAppSelector(state => state.authentication.loginError);
+  const loginUnreachable = useAppSelector(state => state.authentication.loginUnreachable);
   const showModalLogin = useAppSelector(state => state.authentication.showModalLogin);
   const [showModal, setShowModal] = useState(showModalLogin);
   const navigate = useNavigate();
@@ -30,7 +31,15 @@ export const Login = () => {
   if (isAuthenticated) {
     return <Navigate to={returnLocation.current} replace />;
   }
-  return <LoginModal showModal={showModal} handleLogin={handleLogin} handleClose={handleClose} loginError={loginError} />;
+  return (
+    <LoginModal
+      showModal={showModal}
+      handleLogin={handleLogin}
+      handleClose={handleClose}
+      loginError={loginError}
+      loginUnreachable={loginUnreachable}
+    />
+  );
 };
 
 export default Login;

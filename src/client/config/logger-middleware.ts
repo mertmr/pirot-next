@@ -1,7 +1,9 @@
 /* eslint no-console: off */
-export default () => next => action => {
+import type { Middleware } from '@reduxjs/toolkit';
+
+const loggerMiddleware: Middleware = () => next => action => {
   if (DEVELOPMENT) {
-    const { type, payload, meta } = action;
+    const { type, payload, meta } = action as { type?: unknown; payload?: unknown; meta?: unknown };
 
     console.groupCollapsed(type);
     console.log('Payload:', payload);
@@ -11,3 +13,5 @@ export default () => next => action => {
 
   return next(action);
 };
+
+export default loggerMiddleware;

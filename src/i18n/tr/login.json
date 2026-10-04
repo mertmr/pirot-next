@@ -9,7 +9,8 @@
     },
     "messages": {
       "error": {
-        "authentication": "<strong>Giriş işlemi başarısız oldu!</strong> Lütfen kullanıcı bilgilerinizi kontrol edip tekrar deneyin."
+        "authentication": "<strong>Giriş işlemi başarısız oldu!</strong> Lütfen kullanıcı bilgilerinizi kontrol edip tekrar deneyin.",
+        "unreachable": "<strong>Sunucuya ulaşılamadı!</strong> Bağlantınızı kontrol edin, bu site için içerik engelleyicileri kapatın ve tekrar deneyin."
       }
     },
     "password": {

@@ -16,6 +16,7 @@ import { type FieldError, type FieldValues, useForm } from 'react-hook-form';
 export interface ILoginModalProps {
   showModal: boolean;
   loginError: boolean;
+  loginUnreachable: boolean;
   handleLogin: (username: string, password: string, rememberMe: boolean) => void;
   handleClose: () => void;
 }
@@ -31,7 +32,7 @@ const LoginModal = (props: ILoginModalProps) => {
     formState: { errors, touchedFields },
   } = useForm({ mode: 'onTouched' });
 
-  const { loginError, handleClose } = props;
+  const { loginError, loginUnreachable, handleClose } = props;
 
   const handleLoginSubmit = e => {
     handleSubmit(login)(e);
@@ -46,12 +47,21 @@ const LoginModal = (props: ILoginModalProps) => {
         <ModalBody>
           <Row>
             <Col md="12">
-              {loginError && (
-                <Alert variant="danger" data-cy="loginError">
-                  <Translate contentKey="login.messages.error.authentication">
-                    <strong>Failed to sign in!</strong> Please check your credentials and try again.
+              {loginUnreachable ? (
+                <Alert variant="danger" data-cy="loginUnreachable">
+                  <Translate contentKey="login.messages.error.unreachable">
+                    <strong>Could not reach the server!</strong> Check your connection, disable content blockers for this site, and try
+                    again.
                   </Translate>
                 </Alert>
+              ) : (
+                loginError && (
+                  <Alert variant="danger" data-cy="loginError">
+                    <Translate contentKey="login.messages.error.authentication">
+                      <strong>Failed to sign in!</strong> Please check your credentials and try again.
+                    </Translate>
+                  </Alert>
+                )
               )}
             </Col>
             <Col md="12">
@@ -61,6 +71,7 @@ const LoginModal = (props: ILoginModalProps) => {
                 placeholder={translate('global.form.username.placeholder')}
                 required
                 autoFocus
+                autoComplete="username"
                 data-cy="username"
                 validate={{ required: 'Username cannot be empty!' }}
                 register={register}
@@ -73,6 +84,7 @@ const LoginModal = (props: ILoginModalProps) => {
                 label={translate('login.form.password')}
                 placeholder={translate('login.form.password.placeholder')}
                 required
+                autoComplete="current-password"
                 data-cy="password"
                 validate={{ required: 'Password cannot be empty!' }}
                 register={register}

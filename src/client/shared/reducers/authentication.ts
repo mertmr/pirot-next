@@ -2,7 +2,7 @@ import type { IUser } from 'app/shared/model/user.model';
 import { Storage } from 'app/shared/jhipster/storage';
 
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import axios, { AxiosResponse } from 'axios';
+import axios, { AxiosResponse, isAxiosError } from 'axios';
 
 import { AppThunk } from 'app/config/store';
 import { AUTHENTICATION_TOKEN_KEY } from 'app/shared/jhipster/constants';
@@ -15,6 +15,7 @@ export const initialState = {
   isAuthenticated: false,
   loginSuccess: false,
   loginError: false, // Errors returned from server side
+  loginUnreachable: false, // No response reached the server (network, blocker, offline)
   showModalLogin: false,
   account: {} as IUser,
   errorMessage: null as string | null, // Errors returned from server side
@@ -59,7 +60,7 @@ export const login: (username: string, password: string, rememberMe?: boolean) =
   (username, password, rememberMe = false) =>
   async dispatch => {
     const result = await dispatch(authenticate({ username, password, rememberMe }));
-    const response = result.payload as AxiosResponse;
+    const response = result.payload as AxiosResponse | undefined;
     const bearerToken = response?.headers?.authorization;
     if (bearerToken?.startsWith('Bearer ')) {
       const jwt = bearerToken.slice(7, bearerToken.length);
@@ -68,8 +69,12 @@ export const login: (username: string, password: string, rememberMe?: boolean) =
       } else {
         Storage.session.set(AUTHENTICATION_TOKEN_KEY, jwt);
       }
+      await dispatch(getSession());
+    } else {
+      // A failed attempt must neither keep a previous user's credential behind
+      // (shared computer) nor probe the account endpoint without a fresh token.
+      clearAuthToken();
     }
-    dispatch(getSession());
   };
 
 export const clearAuthToken = () => {
@@ -86,11 +91,13 @@ export const logout: () => AppThunk = () => dispatch => {
   dispatch(logoutSession());
 };
 
-export const clearAuthentication = messageKey => dispatch => {
-  clearAuthToken();
-  dispatch(authError(messageKey));
-  dispatch(clearAuth());
-};
+export const clearAuthentication =
+  (messageKey: string): AppThunk =>
+  dispatch => {
+    clearAuthToken();
+    dispatch(authError(messageKey));
+    dispatch(clearAuth());
+  };
 
 export const AuthenticationSlice = createSlice({
   name: 'authentication',
@@ -125,11 +132,13 @@ export const AuthenticationSlice = createSlice({
         errorMessage: action.error.message!,
         showModalLogin: true,
         loginError: true,
+        loginUnreachable: isAxiosError(action.error) && !action.error.response,
       }))
       .addCase(authenticate.fulfilled, state => ({
         ...state,
         loading: false,
         loginError: false,
+        loginUnreachable: false,
         showModalLogin: false,
         loginSuccess: true,
       }))
@@ -153,6 +162,7 @@ export const AuthenticationSlice = createSlice({
       })
       .addCase(authenticate.pending, state => {
         state.loading = true;
+        state.loginUnreachable = false;
       })
       .addCase(getAccount.pending, state => {
         state.loading = true;

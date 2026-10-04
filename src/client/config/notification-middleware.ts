@@ -1,6 +1,7 @@
 import { translate } from 'app/shared/jhipster/language';
 
 import { isAxiosError } from 'axios';
+import type { Middleware, UnknownAction } from '@reduxjs/toolkit';
 import { toast } from 'react-toastify';
 
 import { getMessageFromHeaders } from 'app/shared/jhipster/headers';
@@ -28,14 +29,14 @@ const getFieldErrorsToasts = (fieldErrors: FieldErrorVM[]): ToastMessage[] =>
     return { message: `Error on field "${fieldName}"`, key: `error.${fieldError.message}`, data: { fieldName } };
   });
 
-export default () => next => action => {
-  const { error, payload } = action;
+const notificationMiddleware: Middleware = () => next => action => {
+  const { error, payload } = action as { error?: unknown; payload?: { headers?: Record<string, string> } };
 
   /**
    *
    * The notification middleware serves to add success and error notifications
    */
-  if (isFulfilledAction(action) && payload?.headers) {
+  if (isFulfilledAction(action as UnknownAction) && payload?.headers) {
     const { alertMessage, alertKey, param } = getMessageFromHeaders(payload.headers);
     if (alertKey) {
       toast.success(translate(alertKey, { param }));
@@ -44,7 +45,7 @@ export default () => next => action => {
     }
   }
 
-  if (isRejectedAction(action) && isAxiosError(error)) {
+  if (isRejectedAction(action as UnknownAction) && isAxiosError(error)) {
     if (error.response) {
       const { response } = error;
       if (response.status === 401) {
@@ -89,8 +90,10 @@ export default () => next => action => {
       addErrorAlert({ message: error.message ?? 'Unknown error!' });
     }
   } else if (error) {
-    addErrorAlert({ message: error.message ?? 'Unknown error!' });
+    addErrorAlert({ message: error instanceof Error ? error.message : 'Unknown error!' });
   }
 
   return next(action);
 };
+
+export default notificationMiddleware;
