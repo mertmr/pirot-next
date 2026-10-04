@@ -34,6 +34,9 @@ test.setup('developer session', { sessions: ['developer'] }, async ({ app, scree
   await ensureE2EFixtures(app.baseUrl, token);
 
   await app.open('/login');
+  // First paint pays the dev-server cold start (up to two minutes on CI);
+  // wait explicitly instead of relying on the assertion timeout.
+  await screen.getByTestId('username').waitFor({ state: 'visible', timeout: 120_000 });
   await screen.getByTestId('username').fill(developer.username);
   await screen.getByTestId('password').fill(developer.password);
   await screen.getByTestId('submit').tap();
