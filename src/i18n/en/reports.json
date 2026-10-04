@@ -1,0 +1,56 @@
+{
+  "reports": {
+    "common": {
+      "notFound": "No records found.",
+      "selectProduct": "Select a product",
+      "selectDate": "Select a date",
+      "loading": "Loading...",
+      "columnTotal": "Total",
+      "columnDate": "Date",
+      "columnQuantity": "Quantity",
+      "columnSaleDate": "Sale date",
+      "columnSaleQuantity": "Quantity sold"
+    },
+    "ciro": {
+      "title": "Revenue",
+      "detailTitle": "Daily revenue detail",
+      "startDate": "Start date",
+      "endDate": "End date",
+      "columnStaff": "Shift member",
+      "columnCard": "Card sales",
+      "columnCash": "Cash sales"
+    },
+    "aylikSales": {
+      "title": "Monthly sales",
+      "productLabel": "Select the product whose sales report you want"
+    },
+    "aylikSalesCost": {
+      "title": "Monthly sales",
+      "columnProducts": "Products"
+    },
+    "ortakFaturalar": {
+      "title": "Group invoices",
+      "detailTitle": "Group invoice details",
+      "dateLabel": "Date",
+      "columnProduct": "Product",
+      "columnUnitPrice": "Unit price",
+      "totalLabel": "Total"
+    },
+    "tukenme": {
+      "title": "Product depletion rate report",
+      "productLabel": "Select the product whose depletion rate you want",
+      "stockEntryLabel": "Select the stock entry period for the depletion rate",
+      "selectStockEntry": "Select a stock entry",
+      "monthlyRate": "Monthly depletion rate: {{rate}}",
+      "weeklyRate": "Weekly depletion rate: {{rate}}",
+      "wasteRatio": "Waste as a share of received stock: {{ratio}}%",
+      "dataSpan": "Report data span: {{days}} days"
+    }
+  },
+  "home": {
+    "cardCash": "Cash",
+    "cardDailyRevenue": "Daily revenue",
+    "cardCardSales": "Card sales",
+    "cardCashSales": "Cash sales"
+  }
+}

@@ -2,8 +2,9 @@ import { D1Files } from '../src/server/files';
 import { test, expect } from 'vitest';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { build } from 'esbuild';
-import { readFile } from 'node:fs/promises';
+
 import { unzipSync, strFromU8 } from 'fflate';
+import { applyMigrations } from './migrations';
 
 test('email outage retains persisted jobs; successful retry acknowledges email and a large attached D1 report', async () => {
   const script = await build({
@@ -29,7 +30,6 @@ test('email outage retains persisted jobs; successful retry acknowledges email a
         DELIVERY: { className: 'JobDelivery', useSQLite: true },
       },
       d1Databases: ['DIRECTORY'],
-      r2Buckets: ['FILES'],
       serviceBindings: { EMAIL: { name: 'email-fixture', entrypoint: 'SyntheticEmailProvider' } },
       queueProducers: { JOBS: 'email-fixture-jobs' },
       queueConsumers: { 'email-fixture-jobs': { maxBatchSize: 1, maxBatchTimeout: 0, retryDelay: 1, maxRetries: 5 } },
@@ -43,8 +43,7 @@ test('email outage retains persisted jobs; successful retry acknowledges email a
   );
   try {
     const db = await runtime.getD1Database('DIRECTORY');
-    for (const file of ['0001_directory.sql', '0002_outbox_queue.sql', '0003_business.sql'])
-      await db.exec((await readFile(`migrations/${file}`, 'utf8')).replace(/\n/g, ' '));
+    await applyMigrations(db);
     await db.exec(
       'CREATE TABLE test_email_attempts(payload TEXT); CREATE TABLE test_email_control(enabled INTEGER); INSERT INTO test_email_control VALUES(0);',
     );

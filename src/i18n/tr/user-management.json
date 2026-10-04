@@ -3,7 +3,8 @@
     "home": {
       "title": "Kullanıcılar",
       "createLabel": "Yeni kullanıcı oluştur",
-      "createOrEditLabel": "Kullanıcı oluştur veya düzenle"
+      "createOrEditLabel": "Kullanıcı oluştur veya düzenle",
+      "refreshListLabel": "Listeyi Yenile"
     },
     "created": "A new user is created with identifier {{ param }}",
     "updated": "A user is updated with identifier {{ param }}",

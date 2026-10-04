@@ -28,6 +28,24 @@ The Worker selects private business compute from the authenticated tenant and ov
 
 Each command commits all stock, cash, debt, primary records, audit, outbox and idempotency effects in one D1 batch. A per-tenant revision is compared and incremented first. A checked guard containing the preceding statement's `changes()` result aborts the entire batch when another command won the revision. Conflicts retry the complete plan with fresh reads. A thrown validation error discards the plan; a late database failure rolls back the entire batch. Read-only plans also recheck the revision. Correctness does not depend on object serialization or a distributed transaction. Tests force competing revisions against actual D1 and verify rollback after a late tenant constraint failure.
 
+The Free plan allows 50 D1 queries per Worker invocation, so the query count of a command is part of its correctness. Three rules keep a command's cost independent of the size of the data it touches. A read that is satisfied from the buffered write set never reaches D1, and a primary-key read is fetched at most once per command from a cache keyed on the physical row, so the growing write set cannot invalidate a row that was already loaded. Relation resolution collects every referenced id before fetching anything, so each related kind costs one query instead of one per row. Writes that cannot change an outcome are skipped: a whole-row entity overwrite reads nothing first, a delete pinned to the full primary key needs only that key, and an audit id is allocated from one cached maximum plus the rows buffered locally. `tests/read-budget.test.ts` asserts the counts against real D1, and asserts that a twenty line sale does not cost materially more than a two line one, which is what catches a per-row read returning.
+
+The committed statements are grouped per target table, but a group is closed when its own binding
+budget is spent rather than when any group's is. That distinction is the difference between a hundred
+line sale costing 47 of the plan's 50 and costing 54: closing every open group whenever the widest
+table ran out re-split the others into fragments, which is the per-row pattern the grouping exists to
+remove. The read side is flat in the width of the sale; the statement side is not, because each line
+writes a line row, a stock row and two audit rows, and audit rows are eight bindings wide. A
+hundred-line sale measures 47 of 50 reads and statements together, and the suite asserts it.
+
+A single statement cannot bind more than 100 parameters, so a relation read that spans more ids than that has to be split. The tenant rewrite binds one parameter per chunk of buffered JSON ahead of the caller's own, which makes the widest safe list a function of what the operation has already buffered. That count is read from the adapter (`TenantSql.deltaBindings`) rather than reserved as a fixed allowance: a guess that forgets either the row kind or a second buffered chunk fails an ordinary large sale with `too many SQL variables`, and the width that triggers it is reached by a normal cooperative. `tests/binding-budget.test.ts` covers the accounting, and `tests/read-budget.test.ts` covers a sale wider than one statement can bind.
+
+Four administration screens — configuration, documentation, logs and metrics — were removed because no
+server-side target was ever implemented for them, so every one of them failed to load rather than
+showing anything. Their routes, orphaned locale files and the Swagger UI asset and its menu entry went
+with them; that last one was working, so it is called out here rather than left to be discovered.
+Nothing else in the application referenced them.
+
 BCrypt and report compression use separate private stateless compute objects to preserve legacy hashes and fit the Free edge Worker CPU allowance. These objects store no application data. Moving away from Cloudflare requires replacing compute/binding adapters; persistent data can be recovered from one D1 SQL export.
 
 ## Preserved workflows
@@ -38,7 +56,7 @@ HTTP bodies are bounded to two million streamed UTF-8 bytes before JSON parsing,
 
 Checkout previews, discount preservation, cash/change suggestions, and stock displays retain exact decimal strings as well. Integer quantity controls clamp only their input limit to JavaScript’s safe integer range.
 
-The server ignores requested sale totals, paid flags, and ownership and recalculates from persisted products. Quantities are positive safe integers; gram prices are normalized per kilogram and totals use quarter rounding. The legacy tenant-2 discount rule is explicit. Deferred mode cannot change after creation. Cash collection changes cash once; bank/card collection does not. Editing or deleting compensates the old stock/cash/debt effect. Sale-linked debts cannot be independently edited or deleted.
+The server ignores requested sale totals, paid flags, and ownership and recalculates from persisted products. Quantities are positive safe integers; gram prices are normalized per kilogram and totals use quarter rounding. The maximum discount a sale may carry is the cooperative's own `maxDiscountPercent` setting, which an administrator changes in **Administration → Cloudflare operations**; an absent setting means zero, so the rule can only ever narrow what a cooperative may do. This replaces an earlier rule that keyed the discount allowance to one hardcoded tenant id, and `migrations/0005_seed_discount_ceiling.sql` carries that allowance forward: the cooperative that could discount keeps the 100% it had, and every other cooperative is left at the zero fallback it was already restricted to. The seeded id appears only in that migration, as the historical fact it is. Deferred mode cannot change after creation. Cash collection changes cash once; bank/card collection does not. Editing or deleting compensates the old stock/cash/debt effect. Sale-linked debts cannot be independently edited or deleted.
 
 Closed shifts retain their persisted breakdown. Changes to closed sales, expenses, or transfers require a reason, current active shift, and an immediate or deferred cash choice. Pending correction cash must be settled before another correction. Cancellation preserves historical records. Historical returns retain the legacy restriction on changing quantity/product/type and deleting a refund whose original amount was not recorded.
 
@@ -46,7 +64,7 @@ Decimal values are persisted and transmitted as strings. Input forms retain thei
 
 ## Background delivery
 
-Business/email/report intents enter a transactional outbox. Production and staging bind `JOBS` to Cloudflare Queues. Queue messages contain an outbox reference, keeping large reports and personal data out of the message payload. The consumer forwards the small pointer to a private, stateless SQLite Durable Object, which reads the persisted job, renders XLSX files, stores their metadata and BLOB chunks in D1, sends configured email, and marks the job delivered after successful delivery. Report compression runs under the object CPU allowance rather than the Free queue Worker budget. Failed jobs remain visible and are retryable; queue exhaustion goes to the environment's dead-letter queue. A cron scan requeues unfinished jobs after ten minutes. Queue and email delivery are at least once; email can be duplicated if the provider accepts it before an acknowledgment fails. Financial effects never run in a queue.
+Business/email/report intents enter a transactional outbox. Production and staging bind `JOBS` to Cloudflare Queues. Queue messages contain an outbox reference, keeping large reports and personal data out of the message payload. The consumer forwards the small pointer to a private, stateless SQLite Durable Object, which reads the persisted job, renders XLSX files, stores their metadata and BLOB chunks in D1, sends configured email, and marks the job delivered after successful delivery. Report compression runs under the object CPU allowance rather than the Free queue Worker budget. Failed jobs remain visible and are retryable; queue exhaustion goes to the environment's dead-letter queue. A cron scan requeues unfinished jobs after ten minutes; it runs every fifteen minutes, which is the coarsest interval that still satisfies that ten-minute window, at the cost of up to fifteen minutes of delivery latency for a queued job. The same scan prunes expired tenant rows: idempotency keys after one day, and delivered outbox rows after seven days. A pruning pass is two statements and bounds itself with a rowid subquery, so it costs the same for one cooperative as for a hundred and works a backlog down over successive ticks rather than in one unbounded delete; both age columns are indexed, since the prune is the only consumer and runs on every tick. Pending jobs are never pruned, and `history` is the financial audit trail, so it is retained in full and indexed by time for export rather than deleted. Queue and email delivery are at least once; email can be duplicated if the provider accepts it before an acknowledgment fails. Financial effects never run in a queue.
 
 D1 report keys start with the authenticated tenant. Reports are downloaded through an authenticated endpoint, not a public bucket URL. Month-end reports snapshot current active stock, run in Istanbul time, and use a monthly idempotency key. A cooperative administrator configures its own report recipient and enables the schedule in **Administration → Cloudflare operations**. The report is attached to email when its XLSX is under 3.5 MB; larger reports use an authenticated report-page link to respect email-message limits. Low-stock notifications use the persisted responsible user's email. Invitation and reset emails use Cloudflare Email Service.
 
@@ -64,7 +82,7 @@ bun run dev
 bun run local:seed
 ```
 
-Setup creates ignored local secrets and applies D1 migrations with `--local`. Seed refuses non-localhost URLs and uses synthetic data only. Default credentials are `developer` / `Synthetic-local-password-42`; set `PIROT_DEV_PASSWORD` to change the local fixture password. `.dev.vars` is never deployed. Staging/production disable bootstrap.
+Setup creates ignored local secrets and applies D1 migrations with `--local`. Seed refuses non-localhost URLs and uses synthetic data only. Default credentials are `developer` / `Synthetic-local-password-42`; set `PIROT_DEV_PASSWORD` to change the local fixture password. The browser suite reads the same variable, so it keeps working with an override. `.dev.vars` is never deployed. Staging/production disable bootstrap.
 
 ```bash
 bun run lint
@@ -133,7 +151,7 @@ SELECT id, tenant_id, tarih, toplamTutar, kartliSatis, sonraOdeme, odendi
 FROM satis WHERE tenant_id = 1 ORDER BY id DESC;
 ```
 
-The previous staging layout was migrated using `scripts/migrate-d1-storage.ts`: deploy a temporary `BUSINESS_STORAGE=durable` bridge with the legacy R2 binding, freeze business writes, capture all tables/files into private backups, import into empty D1 business tables, compare a complete D1 export, then deploy D1 mode. The `retire` step checks stored verification proof against unchanged legacy entities/history before clearing the old objects. The migration preserved existing staging records and reports. New deployments use D1 directly and have no R2 binding.
+The previous staging layout was migrated once, from a temporary Durable Object storage bridge with a legacy R2 binding, into D1: business writes were frozen, all tables and files captured into private backups, imported into empty D1 business tables, compared against a complete D1 export, and the legacy objects then cleared only after a stored verification proof matched unchanged entities and history. That migration preserved the existing staging records and reports. D1 is now the only persistent store: there is no R2 binding, no storage-freeze mode, and no alternate business-storage path in the application.
 
 ## Read-only export and resumable migration
 
@@ -160,6 +178,8 @@ bun scripts/import-tenant.ts /secure/path/bundles/tenant-1.json https://staging.
 ```
 
 Each import has begin/batch/history/finish/status/abort operations. Begin requires an empty tenant and marks it unavailable. Batches retain existing IDs and use stable idempotency keys, so the same bundle can resume after interruption. Finish verifies tenant relationships, declared field types, shift references, entity counts, SHA-256 checksums of every canonical entity, the history checksum/count, exact stock totals, latest cash balance, sale/deferred totals, and producer balances. A mismatch leaves the tenant unavailable. Only an unpublished import can be aborted; a live tenant cannot be overwritten or cleared. Sequence counters continue above imported IDs.
+
+The reconciliation manifest is defined once, in `src/server/reconciliation-contract.ts`. The build script and the running server both call that module, so the digests they compare cannot drift apart. Audited history fields are listed there too, and the tenant key is deliberately excluded from the history digest.
 
 ```bash
 # Read-only reconciliation against the prepared bundle:

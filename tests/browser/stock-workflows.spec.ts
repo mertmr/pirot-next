@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createProduct, deleteThroughDialog, findEntity, remove, signIn, stock, uniqueName } from './helpers';
+import { createProduct, dec, deleteThroughDialog, findEntity, remove, signIn, stock, uniqueName } from './helpers';
 
 async function selectProduct(page: import('@playwright/test').Page, productId: number): Promise<void> {
   const option = page.locator(`#stok-girisi-urun option[value="${productId}"]`);
@@ -20,24 +20,24 @@ test('creating, editing and deleting a STOK_GIRISI compensates product stock', a
     await expect(page.getByText(`Güncel Stok: ${stock0} ADET`)).toBeVisible();
 
     await page.locator('#stok-girisi-miktar').fill('7');
-    await expect(page.locator('[data-cy="yeni-stok"]')).toContainText(`Kaydedilecek Yeni Stok: ${stock0 + 7} ADET`);
+    await expect(page.locator('[data-cy="yeni-stok"]')).toContainText(`Kaydedilecek Yeni Stok: ${dec(stock0).plus('7')} ADET`);
     await page.locator('#stok-girisi-notlar').fill(note);
     await page.locator('#save-entity').click();
     await page.waitForURL(/\/stok-girisi(\?|$)/, { timeout: 15_000 });
 
     movementId = (await findEntity<{ id: number }>(request, 'stok-girisis', 'notlar', note)).id;
-    expect(await stock(request, product.id)).toBe(stock0 + 7);
+    expect(await stock(request, product.id)).toBe(dec(stock0).plus('7').toString());
 
     // On edit the persisted effect is reverted before the replacement applies.
     await page.goto(`/stok-girisi/${movementId}/edit`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#stok-girisi-notlar')).toHaveValue(note);
-    await expect(page.locator('[data-cy="yeni-stok"]')).toContainText(`Kaydedilecek Yeni Stok: ${stock0 + 7} ADET`);
+    await expect(page.locator('[data-cy="yeni-stok"]')).toContainText(`Kaydedilecek Yeni Stok: ${dec(stock0).plus('7')} ADET`);
 
     await page.locator('#stok-girisi-miktar').fill('3');
-    await expect(page.locator('[data-cy="yeni-stok"]')).toContainText(`Kaydedilecek Yeni Stok: ${stock0 + 3} ADET`);
+    await expect(page.locator('[data-cy="yeni-stok"]')).toContainText(`Kaydedilecek Yeni Stok: ${dec(stock0).plus('3')} ADET`);
     await page.locator('#save-entity').click();
     await page.waitForURL(/\/stok-girisi(\?|$)/, { timeout: 15_000 });
-    expect(await stock(request, product.id)).toBe(stock0 + 3);
+    expect(await stock(request, product.id)).toBe(dec(stock0).plus('3').toString());
 
     await deleteThroughDialog(page, 'stok-girisi', movementId);
     expect(await stock(request, product.id)).toBe(stock0);

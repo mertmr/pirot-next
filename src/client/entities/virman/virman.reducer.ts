@@ -65,15 +65,6 @@ export const updateEntity = createAsyncThunk(
   { serializeError: serializeAxiosError },
 );
 
-export const partialUpdateEntity = createAsyncThunk(
-  'virman/partial_update_entity',
-  async (entity: IVirman) => {
-    const result = await axios.patch<IVirman>(`${apiUrl}/${entity.id}`, cleanEntity(entity));
-    return result;
-  },
-  { serializeError: serializeAxiosError },
-);
-
 export const deleteEntity = createAsyncThunk(
   'virman/delete_entity',
   async (input: string | number | { id: number; duzeltme?: import('app/shared/model/nobet-duzeltme.model').IDuzeltmeTalebi }) => {
@@ -112,7 +103,7 @@ export const VirmanSlice = createEntitySlice({
           totalItems: parseInt(headers['x-total-count'], 10),
         };
       })
-      .addMatcher(isFulfilled(createEntity, updateEntity, partialUpdateEntity), (state, action) => {
+      .addMatcher(isFulfilled(createEntity, updateEntity), (state, action) => {
         state.updating = false;
         state.loading = false;
         state.updateSuccess = true;
@@ -123,7 +114,7 @@ export const VirmanSlice = createEntitySlice({
         state.updateSuccess = false;
         state.loading = true;
       })
-      .addMatcher(isPending(createEntity, updateEntity, partialUpdateEntity, deleteEntity), state => {
+      .addMatcher(isPending(createEntity, updateEntity, deleteEntity), state => {
         state.errorMessage = null;
         state.updateSuccess = false;
         state.updating = true;

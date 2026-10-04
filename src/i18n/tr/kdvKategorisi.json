@@ -12,7 +12,7 @@
       "updated": "Kdv Kategorisi güncellendi {{ param }}",
       "deleted": "Kdv Kategorisi silindi {{ param }}",
       "delete": {
-        "question": "Kdv Kategorisi {{ id } silmek istediğinize emin misiniz?}?"
+        "question": "Kdv Kategorisi {{ id }} silmek istediğinize emin misiniz?"
       },
       "detail": {
         "title": "Kdv Kategorisi"

@@ -20,6 +20,10 @@ export const messages: Record<string, [string, string]> = {
   invalidstock: ['Stok bilgisi geçersiz.', 'Invalid stock state.'],
   invalidpayment: ['Ödeme yöntemi geçersiz.', 'Invalid payment method.'],
   invaliddiscount: ['Bu kooperatif için indirim geçersiz.', 'Invalid discount for this cooperative.'],
+  discountlimit: [
+    'Bu kooperatifin indirim sınırı aşıldı. Yönetici, Yönetim → Cloudflare işlemleri ekranından en yüksek indirim oranını girebilir.',
+    "This cooperative's discount ceiling was exceeded. An administrator can set the maximum discount under Administration → Cloudflare operations.",
+  ],
   invalidtransition: ['Nöbet durumu değişti. Lütfen yenileyin.', 'Shift state changed. Please refresh.'],
   cashrequired: ['Sistem kasası bulunamadı.', 'System cash is unavailable.'],
   notesrequired: ['Kasa farkı için açıklama gerekli.', 'A note is required for a cash discrepancy.'],

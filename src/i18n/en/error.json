@@ -23,6 +23,7 @@
     "invalidstock": "Invalid stock state.",
     "invalidpayment": "Invalid payment method.",
     "invaliddiscount": "Invalid discount for this cooperative.",
+    "discountlimit": "This cooperative's discount ceiling was exceeded. An administrator can set the maximum discount under Administration → Cloudflare operations.",
     "invalidtransition": "Shift state changed. Please refresh.",
     "cashrequired": "System cash is unavailable.",
     "notesrequired": "A note is required for a cash discrepancy.",

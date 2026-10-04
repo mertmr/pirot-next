@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import Button from 'react-bootstrap/Button';
 import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
@@ -12,6 +12,7 @@ import { getEntities as getUreticis } from 'app/entities/uretici/uretici.reducer
 import { convertDateTimeFromServer, convertDateTimeToServer, displayDefaultDateTime } from 'app/shared/util/date-utils';
 
 import { createEntity, getEntity, reset, updateEntity } from './uretici-odemeleri.reducer';
+import { isEntityFormReady } from 'app/shared/util/entity-form';
 
 export const UreticiOdemeleriUpdate = () => {
   const dispatch = useAppDispatch();
@@ -23,7 +24,7 @@ export const UreticiOdemeleriUpdate = () => {
 
   const ureticis = useAppSelector(state => state.uretici.entities);
   const ureticiOdemeleriEntity = useAppSelector(state => state.ureticiOdemeleri.entity);
-  const loading = useAppSelector(state => state.ureticiOdemeleri.loading);
+  const formReady = isEntityFormReady(ureticiOdemeleriEntity, id, isNew);
   const updating = useAppSelector(state => state.ureticiOdemeleri.updating);
   const updateSuccess = useAppSelector(state => state.ureticiOdemeleri.updateSuccess);
 
@@ -66,16 +67,21 @@ export const UreticiOdemeleriUpdate = () => {
     }
   };
 
-  const defaultValues = () =>
-    isNew
-      ? {
-          sonGuncellenmeTarihi: displayDefaultDateTime(),
-        }
-      : {
-          ...ureticiOdemeleriEntity,
-          sonGuncellenmeTarihi: convertDateTimeFromServer(ureticiOdemeleriEntity.sonGuncellenmeTarihi),
-          uretici: ureticiOdemeleriEntity?.uretici?.id,
-        };
+  // Memoized identity matters: ValidatedForm resets the form whenever the
+  // defaultValues reference changes, so it must not be rebuilt on every render.
+  const defaultValues = useMemo(
+    () =>
+      isNew
+        ? {
+            sonGuncellenmeTarihi: displayDefaultDateTime(),
+          }
+        : {
+            ...ureticiOdemeleriEntity,
+            sonGuncellenmeTarihi: convertDateTimeFromServer(ureticiOdemeleriEntity.sonGuncellenmeTarihi),
+            uretici: ureticiOdemeleriEntity?.uretici?.id,
+          },
+    [isNew, ureticiOdemeleriEntity],
+  );
 
   return (
     <div>
@@ -88,10 +94,10 @@ export const UreticiOdemeleriUpdate = () => {
       </Row>
       <Row className="justify-content-center">
         <Col md="8">
-          {loading ? (
-            <p>Loading...</p>
+          {!formReady ? (
+            <p>{translate('reports.common.loading')}</p>
           ) : (
-            <ValidatedForm defaultValues={defaultValues()} onSubmit={saveEntity}>
+            <ValidatedForm defaultValues={defaultValues} onSubmit={saveEntity}>
               {!isNew && (
                 <ValidatedField
                   name="id"

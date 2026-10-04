@@ -22,7 +22,7 @@ In another terminal:
 bun run local:seed
 ```
 
-Open <http://127.0.0.1:9070>. The synthetic local user is `developer`; its documented development-only password is `Synthetic-local-password-42`. Set `PIROT_DEV_PASSWORD` to change it. Local setup generates ignored secrets and initializes local D1 without contacting remote resources.
+Open <http://127.0.0.1:9070>. The synthetic local user is `developer`; its documented development-only password is `Synthetic-local-password-42`. Set `PIROT_DEV_PASSWORD` to change it; the browser suite honours the same variable. Local setup generates ignored secrets and initializes local D1 without contacting remote resources.
 
 ## Verification
 

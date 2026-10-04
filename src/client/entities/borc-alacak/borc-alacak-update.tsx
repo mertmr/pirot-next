@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import Button from 'react-bootstrap/Button';
 import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
@@ -15,6 +15,7 @@ import { OdemeAraci } from 'app/shared/model/enumerations/odeme-araci.model';
 import { convertDateTimeFromServer, convertDateTimeToServer, displayDefaultDateTime } from 'app/shared/util/date-utils';
 
 import { createEntity, getEntity, reset, updateEntity } from './borc-alacak.reducer';
+import { isEntityFormReady } from 'app/shared/util/entity-form';
 
 export const BorcAlacakUpdate = () => {
   const dispatch = useAppDispatch();
@@ -27,7 +28,7 @@ export const BorcAlacakUpdate = () => {
   const users = useAppSelector(state => state.userManagement.users);
   const uruns = useAppSelector(state => state.urun.entities);
   const borcAlacakEntity = useAppSelector(state => state.borcAlacak.entity);
-  const loading = useAppSelector(state => state.borcAlacak.loading);
+  const formReady = isEntityFormReady(borcAlacakEntity, id, isNew);
   const updating = useAppSelector(state => state.borcAlacak.updating);
   const updateSuccess = useAppSelector(state => state.borcAlacak.updateSuccess);
   const odemeAraciValues = Object.keys(OdemeAraci);
@@ -74,19 +75,24 @@ export const BorcAlacakUpdate = () => {
     }
   };
 
-  const defaultValues = () =>
-    isNew
-      ? {
-          tarih: displayDefaultDateTime(),
-        }
-      : {
-          odemeAraci: 'NAKIT',
-          hareketTipi: 'URUN_GIRISI',
-          ...borcAlacakEntity,
-          tarih: convertDateTimeFromServer(borcAlacakEntity.tarih),
-          user: borcAlacakEntity?.user?.id,
-          urun: borcAlacakEntity?.urun?.id,
-        };
+  // Memoized identity matters: ValidatedForm resets the form whenever the
+  // defaultValues reference changes, so it must not be rebuilt on every render.
+  const defaultValues = useMemo(
+    () =>
+      isNew
+        ? {
+            tarih: displayDefaultDateTime(),
+          }
+        : {
+            odemeAraci: 'NAKIT',
+            hareketTipi: 'URUN_GIRISI',
+            ...borcAlacakEntity,
+            tarih: convertDateTimeFromServer(borcAlacakEntity.tarih),
+            user: borcAlacakEntity?.user?.id,
+            urun: borcAlacakEntity?.urun?.id,
+          },
+    [isNew, borcAlacakEntity],
+  );
 
   return (
     <div>
@@ -99,10 +105,10 @@ export const BorcAlacakUpdate = () => {
       </Row>
       <Row className="justify-content-center">
         <Col md="8">
-          {loading ? (
-            <p>Loading...</p>
+          {!formReady ? (
+            <p>{translate('reports.common.loading')}</p>
           ) : (
-            <ValidatedForm defaultValues={defaultValues()} onSubmit={saveEntity}>
+            <ValidatedForm defaultValues={defaultValues} onSubmit={saveEntity}>
               {!isNew && (
                 <ValidatedField
                   name="id"

@@ -112,15 +112,6 @@ export const updateEntity = createAsyncThunk(
   { serializeError: serializeAxiosError },
 );
 
-export const partialUpdateEntity = createAsyncThunk(
-  'nobetHareketleri/partial_update_entity',
-  async (entity: INobetHareketleri) => {
-    const result = await axios.patch<INobetHareketleri>(`${apiUrl}/${entity.id}`, cleanEntity(entity));
-    return result;
-  },
-  { serializeError: serializeAxiosError },
-);
-
 export const deleteEntity = createAsyncThunk(
   'nobetHareketleri/delete_entity',
   async (id: string | number) => {
@@ -162,9 +153,6 @@ export const NobetHareketleriSlice = createEntitySlice({
       .addCase(updateEntity.rejected, (state, action) => {
         state.saveError = action.error.message ?? 'Nöbet güncellenemedi';
       })
-      .addCase(partialUpdateEntity.rejected, (state, action) => {
-        state.saveError = action.error.message ?? 'Nöbet güncellenemedi';
-      })
       .addCase(deleteEntity.fulfilled, state => {
         state.updating = false;
         state.updateSuccess = true;
@@ -179,7 +167,7 @@ export const NobetHareketleriSlice = createEntitySlice({
           totalItems: parseInt(headers['x-total-count'], 10),
         };
       })
-      .addMatcher(isFulfilled(createEntity, updateEntity, partialUpdateEntity), (state, action) => {
+      .addMatcher(isFulfilled(createEntity, updateEntity), (state, action) => {
         state.updating = false;
         state.loading = false;
         state.updateSuccess = true;
@@ -191,7 +179,7 @@ export const NobetHareketleriSlice = createEntitySlice({
         state.updateSuccess = false;
         state.loading = true;
       })
-      .addMatcher(isPending(createEntity, updateEntity, partialUpdateEntity, deleteEntity), state => {
+      .addMatcher(isPending(createEntity, updateEntity, deleteEntity), state => {
         state.errorMessage = null;
         state.updateSuccess = false;
         state.updating = true;

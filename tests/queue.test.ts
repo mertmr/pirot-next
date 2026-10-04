@@ -2,8 +2,9 @@ import { D1Files } from '../src/server/files';
 import { test, expect } from 'vitest';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { build } from 'esbuild';
-import { readFile } from 'node:fs/promises';
+
 import { object, list } from '../src/server/value';
+import { applyMigrations } from './migrations';
 test('real Cloudflare queue transports only outbox references and acknowledges after D1 delivery', async () => {
   const script = await build({
     entryPoints: ['tests/worker.ts'],
@@ -27,7 +28,6 @@ test('real Cloudflare queue transports only outbox references and acknowledges a
         DELIVERY: { className: 'JobDelivery', useSQLite: true },
       },
       d1Databases: ['DIRECTORY'],
-      r2Buckets: ['FILES'],
       queueProducers: { JOBS: 'fixture-jobs' },
       queueConsumers: { 'fixture-jobs': { maxBatchSize: 1, maxBatchTimeout: 0, retryDelay: 1, maxRetries: 2 } },
       bindings: {
@@ -39,8 +39,7 @@ test('real Cloudflare queue transports only outbox references and acknowledges a
   );
   try {
     const db = await runtime.getD1Database('DIRECTORY');
-    for (const file of ['0001_directory.sql', '0002_outbox_queue.sql', '0003_business.sql'])
-      await db.exec((await readFile(`migrations/${file}`, 'utf8')).replace(/\n/g, ' '));
+    await applyMigrations(db);
     await db.prepare('INSERT INTO tenants(id,tenant_name) VALUES (1,?)').bind('Synthetic queue tenant').run();
     const pausedTenant = crypto.randomUUID(),
       pausedDirectory = crypto.randomUUID(),

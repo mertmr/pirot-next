@@ -9,6 +9,7 @@ import { IStokGirisiUrun } from 'app/shared/model/stok-girisi-urun.model';
 import { ITukenme, defaultValue as defaultTukenme } from 'app/shared/model/tukenme.model';
 import { IUrun } from 'app/shared/model/urun.model';
 import CustomTextFormat from 'app/shared/util/CustomTextFormat';
+import { translate } from 'app/shared/jhipster/language';
 
 export const TukenmePage = () => {
   const [urunler, setUrunler] = useState<IUrun[]>([]);
@@ -52,11 +53,11 @@ export const TukenmePage = () => {
 
   return (
     <div>
-      <h2 id="tukenme-page-heading">Ürün Tükenme Hızı Raporu</h2>
+      <h2 id="tukenme-page-heading">{translate('reports.tukenme.title')}</h2>
       <Form.Group className="mb-3">
-        <Form.Label>Tükenme hızını öğrenmek istediğiniz ürünü seçin</Form.Label>
+        <Form.Label>{translate('reports.tukenme.productLabel')}</Form.Label>
         <Form.Select value={urun?.id ?? ''} onChange={selectUrun}>
-          <option value="">Ürün seçiniz</option>
+          <option value="">{translate('reports.common.selectProduct')}</option>
           {urunler.map(item => (
             <option key={item.id} value={item.id}>
               {item.urunAdi}
@@ -65,9 +66,9 @@ export const TukenmePage = () => {
         </Form.Select>
       </Form.Group>
       <Form.Group className="mb-3">
-        <Form.Label>Tükenme hızını öğrenmek istediğiniz stok girişi periyodunu seçin</Form.Label>
+        <Form.Label>{translate('reports.tukenme.stockEntryLabel')}</Form.Label>
         <Form.Select value={stokGirisi?.stokGirisiId ?? ''} onChange={selectStokGirisi} disabled={!urun}>
-          <option value="">Stok girişi seçiniz</option>
+          <option value="">{translate('reports.tukenme.selectStockEntry')}</option>
           {stokGirisleri.map(item => (
             <option key={item.stokGirisiId} value={item.stokGirisiId}>
               {item.stokGirisAciklamasi}
@@ -76,20 +77,20 @@ export const TukenmePage = () => {
         </Form.Select>
       </Form.Group>
       <div className="mb-3">
-        <div>Aylık Tükenme Hızı: {tukenme.aylikTukenmeHizi ?? 0}</div>
-        <div>Haftalık Tükenme Hızı: {tukenme.haftalikTukenmeHizi ?? 0}</div>
+        <div>{translate('reports.tukenme.monthlyRate', { rate: tukenme.aylikTukenmeHizi ?? 0 })}</div>
+        <div>{translate('reports.tukenme.weeklyRate', { rate: tukenme.haftalikTukenmeHizi ?? 0 })}</div>
         <div>
           Bu Periyotta Girilen Fire: {tukenme.urunFire ?? 0} {urun?.birim ?? ''}
         </div>
-        <div>Firenin Girilen Stoğa Oranı: %{fireOrani}</div>
-        <div>Rapor Veri Ölçek Süresi: {tukenme.raporVeriOlcekSuresi ?? 0} gün</div>
+        <div>{translate('reports.tukenme.wasteRatio', { ratio: fireOrani })}</div>
+        <div>{translate('reports.tukenme.dataSpan', { days: tukenme.raporVeriOlcekSuresi ?? 0 })}</div>
       </div>
       {tukenme.stokGunluguList?.length ? (
         <Table striped responsive>
           <thead>
             <tr>
-              <th>Satış Tarihi</th>
-              <th>Satış Miktarı</th>
+              <th>{translate('reports.common.columnSaleDate')}</th>
+              <th>{translate('reports.common.columnSaleQuantity')}</th>
             </tr>
           </thead>
           <tbody>
@@ -104,7 +105,7 @@ export const TukenmePage = () => {
           </tbody>
         </Table>
       ) : (
-        <div className="alert alert-warning">Kayıt bulunamadı.</div>
+        <div className="alert alert-warning">{translate('reports.common.notFound')}</div>
       )}
     </div>
   );

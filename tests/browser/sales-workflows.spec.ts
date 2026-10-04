@@ -8,12 +8,13 @@ import {
   createSale,
   createTenant,
   debtsForSale,
+  dec,
   gotoSaleEditor,
   missing,
+  money,
   posSaveButton,
   registerUser,
   remove,
-  roundToQuarter,
   sale,
   signIn,
   stock,
@@ -52,7 +53,7 @@ test('an edited deferred sale stays deferred and keeps its debt in sync', async 
     await page.waitForURL(/\/satis(\?|$)/, { timeout: 15_000 });
 
     const updated = await sale(request, saleId);
-    expect(Number(updated.toplamTutar)).toBeCloseTo(roundToQuarter(12.5 * 2), 2);
+    expect(updated.toplamTutar).toBe('25.00');
     expect(updated.odendi).toBe(false);
     expect(updated.sonraOdeme).toBe(true);
 
@@ -61,16 +62,16 @@ test('an edited deferred sale stays deferred and keeps its debt in sync', async 
     expect(debts).toHaveLength(1);
     expect(debts[0].hareketTipi).toBe('BORC');
     expect(debts[0].odemeAraci).toBe('SONRA_ODEME');
-    expect(Number(debts[0].tutar)).toBeCloseTo(25, 2);
-    expect(await cash(request)).toBeCloseTo(cash0, 2);
-    expect(await stock(request, product.id)).toBe(stock0 - 2);
+    expect(debts[0].tutar).toBe('25.00');
+    expect(await cash(request)).toBe(cash0);
+    expect(await stock(request, product.id)).toBe(dec(stock0).minus('2').toString());
   } finally {
     await remove(request, 'satis', saleId);
     await remove(request, 'uruns', product.id);
   }
   expect(await debtsForSale(request, saleId)).toHaveLength(0);
   expect(await stock(request, product.id)).toBe(stock0);
-  expect(await cash(request)).toBeCloseTo(cash0, 2);
+  expect(await cash(request)).toBe(cash0);
 });
 
 test('deleting a deferred sale through the dialog removes its debt and restores stock', async ({ page, request }) => {
@@ -97,7 +98,7 @@ test('deleting a deferred sale through the dialog removes its debt and restores 
     await remove(request, 'uruns', product.id);
   }
   expect(await stock(request, product.id)).toBe(stock0);
-  expect(await cash(request)).toBeCloseTo(cash0, 2);
+  expect(await cash(request)).toBe(cash0);
 });
 
 test('the first quantity of a low-stock GRAM product clamps to the available stock', async ({ page, request }) => {
@@ -156,17 +157,17 @@ test('checkout persists a fractional cash amount exactly and reverses it on dele
     saleId = created.id;
     expect(created.toplamTutar).toBe('12.25');
     await expect(page.getByText('Satış tamamlandı', { exact: true })).toBeVisible();
-    expect(await cash(request)).toBeCloseTo(cash0 + 12.25, 2);
-    expect(await stock(request, product.id)).toBe(4);
+    expect(await cash(request)).toBe(money(dec(cash0).plus('12.25')));
+    expect(await stock(request, product.id)).toBe('4');
   } finally {
     if (saleId) await remove(request, 'satis', saleId);
     await remove(request, 'uruns', product.id);
   }
-  expect(await cash(request)).toBeCloseTo(cash0, 2);
-  expect(await stock(request, product.id)).toBe(5);
+  expect(await cash(request)).toBe(cash0);
+  expect(await stock(request, product.id)).toBe('5');
 });
 
-test('a tenant-2 discount rounds at the quarter boundary through the checkout', async ({ page, request }) => {
+test('a configured discount ceiling rounds at the quarter boundary through the checkout', async ({ page, request }) => {
   const login = `rounding-${crypto.randomUUID().slice(0, 8)}`;
   const credentials = await registerUser(request, { tenantId: SECONDARY_TENANT_ID, login, password: 'Synthetic-rounding-password-42' });
   const token = await authenticate(request, credentials);
@@ -192,13 +193,13 @@ test('a tenant-2 discount rounds at the quarter boundary through the checkout', 
     saleId = created.id;
     expect(created.toplamTutar).toBe('1.25');
     await expect(page.getByText('Satış tamamlandı', { exact: true })).toBeVisible();
-    expect(await cash(request, token)).toBeCloseTo(cash0 + 1.25, 2);
-    expect(await stock(request, product.id, token)).toBe(4);
+    expect(await cash(request, token)).toBe(money(dec(cash0).plus('1.25')));
+    expect(await stock(request, product.id, token)).toBe('4');
 
     await remove(request, 'satis', saleId, token);
     saleId = undefined;
-    expect(await cash(request, token)).toBeCloseTo(cash0, 2);
-    expect(await stock(request, product.id, token)).toBe(5);
+    expect(await cash(request, token)).toBe(cash0);
+    expect(await stock(request, product.id, token)).toBe('5');
   } finally {
     if (saleId) await remove(request, 'satis', saleId, token);
     await remove(request, 'uruns', product.id, token);

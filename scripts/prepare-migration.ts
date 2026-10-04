@@ -2,10 +2,9 @@ import { createReadStream } from 'node:fs';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { resolve } from 'node:path';
-import { createHash } from 'node:crypto';
 import { parse as losslessParse, isLosslessNumber } from 'lossless-json';
 import { ENTITY_SPECS, type EntityKind } from '../src/server/entity-specs';
-import { canonical } from '../src/server/migration';
+import { buildManifest } from '../src/server/reconciliation-contract';
 import { decimal, integer, date, object, type Entity, type JsonObject } from '../src/server/value';
 export function normalize(kind: EntityKind, input: JsonObject): Entity {
   const row = { ...input, id: integer(input.id, true), tenantId: integer(input.tenantId, true) } as Entity;
@@ -24,40 +23,10 @@ export function manifest(
   historyCount: number,
   history: JsonObject[] = [],
 ): JsonObject {
-  const counts: JsonObject = {},
-    digests: JsonObject = {};
-  for (const kind of Object.keys(ENTITY_SPECS) as EntityKind[]) {
-    entities[kind].sort((a, b) => a.id - b.id);
-    counts[kind] = entities[kind].length;
-    const hash = createHash('sha256');
-    for (const row of entities[kind]) hash.update(canonical(row)).update('\n');
-    digests[kind] = hash.digest('hex');
-  }
-  const sum = (kind: EntityKind, field: string, predicate: (row: Entity) => boolean = () => true) =>
-    entities[kind]
-      .filter(predicate)
-      .reduce((n, row) => n.plus(decimal(row[field], '0')), decimal('0'))
-      .toString();
-  const cash = entities['kasa-hareketleris'].toSorted((a, b) => String(b.tarih).localeCompare(String(a.tarih)) || b.id - a.id)[0];
-  const historyHash = createHash('sha256');
-  for (const row of history) {
-    const record = Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'tenantId'));
-    historyHash.update(canonical(record)).update('\n');
-  }
-  return {
-    historyDigest: historyHash.digest('hex'),
-    tenantId,
-    counts,
-    digests,
-    historyCount,
-    balances: {
-      stock: sum('uruns', 'stok'),
-      cash: cash?.kasaMiktar ?? null,
-      sales: sum('satis', 'toplamTutar', r => !r.iptal),
-      deferred: sum('satis', 'toplamTutar', r => !!r.sonraOdeme && !r.odendi && !r.iptal),
-      producer: sum('uretici-odemeleris', 'tutar'),
-    },
-  };
+  // The shape is defined once, in src/server/reconciliation-contract, so this
+  // script and the running server cannot disagree about a financial digest.
+  if (historyCount !== history.length) throw new Error(`History count ${historyCount} does not match the ${history.length} supplied rows`);
+  return buildManifest(tenantId, entities, history);
 }
 function cleanLossless(value: unknown): unknown {
   if (isLosslessNumber(value)) return value.value;

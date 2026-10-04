@@ -1,4 +1,14 @@
+import Decimal from 'decimal.js';
 import { type APIRequestContext, type Page, expect } from '@playwright/test';
+
+/**
+ * Exact decimal helpers for assertions. Money and stock cross the API as exact
+ * strings, so the suite compares exact strings: converting them to a JavaScript
+ * number would silently accept a lost cent, which is the invariant this project
+ * treats as mandatory.
+ */
+export const dec = (value: Decimal.Value): Decimal => new Decimal(value ?? 0);
+export const money = (value: Decimal.Value): string => dec(value).toDecimalPlaces(2).toFixed(2);
 
 export type Credentials = { username: string; password: string };
 export type JsonRecord = Record<string, unknown>;
@@ -6,12 +16,16 @@ export type JsonRecord = Record<string, unknown>;
 /**
  * The synthetic development identity seeded by scripts/local-seed.mjs. It owns
  * tenant 1 and holds ROLE_ADMIN, so it can provision further test fixtures.
+ *
+ * The seed honours PIROT_DEV_PASSWORD, so every consumer must read it from here
+ * rather than repeating the documented default.
  */
-export const DEVELOPER: Credentials = { username: 'developer', password: 'Synthetic-local-password-42' };
+export const DEVELOPER_PASSWORD = process.env.PIROT_DEV_PASSWORD ?? 'Synthetic-local-password-42';
+export const DEVELOPER: Credentials = { username: 'developer', password: DEVELOPER_PASSWORD };
 
 /**
- * Provisioned by tests/browser/setup.ts. The server only accepts a non-zero sale
- * discount when the tenant id is exactly 2, so that workflow depends on this id.
+ * Provisioned by tests/browser/setup.ts, which grants it a non-zero discount
+ * ceiling. The ceiling is cooperative configuration, not a fixed tenant id.
  */
 export const SECONDARY_TENANT_ID = 2;
 
@@ -20,7 +34,6 @@ export const posSaveButton = (page: Page) => page.locator('#save-entity-desktop:
 export const uniqueName = (prefix: string) => `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
 
 /** Mirrors the server's quarter-TL rounding so specs can predict authoritative totals. */
-export const roundToQuarter = (value: number) => Math.round(value * 4) / 4;
 
 const tokens = new Map<string, string>();
 
@@ -119,13 +132,13 @@ export async function sale(request: APIRequestContext, saleId: number, token?: s
 }
 
 /** Reads the authoritative tenant cash balance (the latest append-only ledger row). */
-export async function cash(request: APIRequestContext, token?: string): Promise<number> {
-  const rows = await api<Array<{ kasaMiktar: string | number }>>(request, 'kasa-hareketleris?page=0&size=1&sort=id,desc', { token });
-  return rows.length ? Number(rows[0].kasaMiktar) : 0;
+export async function cash(request: APIRequestContext, token?: string): Promise<string> {
+  const rows = await api<Array<{ kasaMiktar: string }>>(request, 'kasa-hareketleris?page=0&size=1&sort=id,desc', { token });
+  return money(rows.length ? rows[0].kasaMiktar : 0);
 }
 
-export async function stock(request: APIRequestContext, productId: number, token?: string): Promise<number> {
-  return Number((await api<{ stok: string }>(request, `uruns/${productId}`, { token })).stok);
+export async function stock(request: APIRequestContext, productId: number, token?: string): Promise<string> {
+  return String((await api<{ stok: string }>(request, `uruns/${productId}`, { token })).stok);
 }
 
 export type Debt = { id: number; hareketTipi: string; odemeAraci: string; tutar: string; satis?: number | { id?: number } | null };

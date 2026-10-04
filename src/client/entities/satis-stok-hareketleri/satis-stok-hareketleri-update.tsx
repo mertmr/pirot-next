@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import Button from 'react-bootstrap/Button';
 import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
@@ -12,6 +12,7 @@ import { getEntities as getSatises } from 'app/entities/satis/satis.reducer';
 import { getEntities as getUruns } from 'app/entities/urun/urun.reducer';
 
 import { createEntity, getEntity, reset, updateEntity } from './satis-stok-hareketleri.reducer';
+import { isEntityFormReady } from 'app/shared/util/entity-form';
 
 export const SatisStokHareketleriUpdate = () => {
   const dispatch = useAppDispatch();
@@ -24,7 +25,7 @@ export const SatisStokHareketleriUpdate = () => {
   const uruns = useAppSelector(state => state.urun.entities);
   const satises = useAppSelector(state => state.satis.entities);
   const satisStokHareketleriEntity = useAppSelector(state => state.satisStokHareketleri.entity);
-  const loading = useAppSelector(state => state.satisStokHareketleri.loading);
+  const formReady = isEntityFormReady(satisStokHareketleriEntity, id, isNew);
   const updating = useAppSelector(state => state.satisStokHareketleri.updating);
   const updateSuccess = useAppSelector(state => state.satisStokHareketleri.updateSuccess);
 
@@ -71,14 +72,19 @@ export const SatisStokHareketleriUpdate = () => {
     }
   };
 
-  const defaultValues = () =>
-    isNew
-      ? {}
-      : {
-          ...satisStokHareketleriEntity,
-          urun: satisStokHareketleriEntity?.urun?.id,
-          satis: satisStokHareketleriEntity?.satis?.id,
-        };
+  // Memoized identity matters: ValidatedForm resets the form whenever the
+  // defaultValues reference changes, so it must not be rebuilt on every render.
+  const defaultValues = useMemo(
+    () =>
+      isNew
+        ? {}
+        : {
+            ...satisStokHareketleriEntity,
+            urun: satisStokHareketleriEntity?.urun?.id,
+            satis: satisStokHareketleriEntity?.satis?.id,
+          },
+    [isNew, satisStokHareketleriEntity],
+  );
 
   return (
     <div>
@@ -91,10 +97,10 @@ export const SatisStokHareketleriUpdate = () => {
       </Row>
       <Row className="justify-content-center">
         <Col md="8">
-          {loading ? (
-            <p>Loading...</p>
+          {!formReady ? (
+            <p>{translate('reports.common.loading')}</p>
           ) : (
-            <ValidatedForm defaultValues={defaultValues()} onSubmit={saveEntity}>
+            <ValidatedForm defaultValues={defaultValues} onSubmit={saveEntity}>
               {!isNew && (
                 <ValidatedField
                   name="id"
