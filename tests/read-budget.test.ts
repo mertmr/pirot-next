@@ -35,6 +35,11 @@ const PER_LINE_SLACK = 6;
  * statements rather than sitting comfortably inside one.
  */
 const WIDE_SALE_LINES = 99;
+/**
+ * The widest sale this suite claims fits the Free plan's per-invocation allowance. Measured at 47
+ * of 50 for reads and committed statements together.
+ */
+const HUNDRED_LINE_SALE = 100;
 
 const products: number[] = [];
 let runtime: Miniflare,
@@ -203,8 +208,7 @@ describe('D1 query budget', () => {
     // limit outright. How wide a list may be depends on what the tenant rewrite has already bound
     // for the buffered writes, so a fixed allowance silently fails the whole command once a
     // cooperative is one product wider than it — an opaque 500 on an ordinary large sale. This
-    // width sits on that boundary, and it is also the point where the command's total cost, reads
-    // and statements together, reaches the Free plan's per-invocation allowance.
+    // width sits on that boundary.
     const wide = await ensureProducts(WIDE_SALE_LINES, 'Wide');
     const width = wide.length;
     // Wider than one statement can bind, so the products are necessarily read in several
@@ -225,6 +229,25 @@ describe('D1 query budget', () => {
     // property the relation batching exists for, and it is what this width has to preserve; the
     // committed-statement side is bounded by `tests/write-compaction.test.ts` instead.
     expect(integer(measured.reads, true)).toBeLessThan(BUDGET / 2);
+  });
+
+  it('keeps a hundred line sale inside the plan allowance', async () => {
+    // The widest sale the read budget work is claimed to serve. The read side is flat in the width
+    // of the sale, but the committed statements are not: each line writes a row, a stock row and two
+    // audit rows, and audit rows are eight bindings wide, so they set the floor. What must not
+    // happen is the grouping collapsing back into a statement per row, which put this case over the
+    // allowance before compaction stopped closing other tables' groups whenever one table filled up.
+    const wide = await ensureProducts(HUNDRED_LINE_SALE, 'Hundred');
+    await reset();
+    const created = await ok('/api/satis', 'POST', { stokHareketleriLists: lines(wide, 1) });
+    const measured = await stats();
+
+    expect(created.toplamTutar).toBe((HUNDRED_LINE_SALE * 10).toFixed(2));
+    expect(list((await ok(`/api/satis/${integer(created.id, true)}`, 'GET')).stokHareketleriLists)).toHaveLength(HUNDRED_LINE_SALE);
+    expect(integer(measured.reads, true) + integer(measured.writes, true)).toBeLessThan(BUDGET);
+    // Widening from a two line sale by ninety-eight lines must not cost ninety-eight more queries.
+    // Measured slope is about a fifth of a statement per line; anything near one is per-row again.
+    expect(integer(measured.writes, true) - integer(measured.reads, true)).toBeLessThan(HUNDRED_LINE_SALE / 4);
   });
 
   it('serves reads without writing, so a read never bumps the tenant revision', async () => {

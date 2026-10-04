@@ -153,6 +153,36 @@ describe('write compaction', () => {
     expect(out[1].sql).toBe(second.sql);
   });
 
+  it('does not close other tables when one table spends its binding budget', () => {
+    // The failure this guards: a group that runs out of budget used to flush every open group, so
+    // the table with the widest rows — history, at eight bindings a row — determined how often all
+    // the others were split. Compaction then produced one statement per table per handful of rows,
+    // which is the per-row pattern it exists to remove.
+    const history = (id: number): Statement => ({
+      sql: `INSERT INTO business_history(tenant_id,id,kind,entity_id,actor,operation,before_json,after_json,at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET kind=excluded.kind,entity_id=excluded.entity_id,actor=excluded.actor,operation=excluded.operation,before_json=excluded.before_json,after_json=excluded.after_json,at=excluded.at`,
+      bindings: [1, id, 'uruns', id, 'actor', 'CREATE', null, null, '2026-10-01T00:00:00.000Z'],
+    });
+    const statements: Statement[] = [];
+    // A hundred lines, each writing its own line row, its own product row and two history rows,
+    // interleaved the way `saveSale` issues them.
+    for (let line = 1; line <= 100; line++)
+      statements.push(upsert('satis_stok_hareketleri', line), upsert('urun', line), history(line * 2), history(line * 2 + 1));
+
+    const out = compact(statements);
+
+    // Nothing is lost or duplicated, whatever the grouping does.
+    expect(writes(out)).toEqual(writes(statements));
+    expect(wellFormed(out)).toBe(true);
+    // Four tables, and none of them split by another table's budget. A hundred three-binding rows
+    // pack into four statements whatever else is being written; the pre-fix flush produced 74.
+    expect(out.filter(s => s.sql.startsWith('INSERT INTO urun(')).length).toBeLessThanOrEqual(4);
+    expect(out.filter(s => s.sql.startsWith('INSERT INTO satis_stok_hareketleri(')).length).toBeLessThanOrEqual(4);
+    expect(out.length).toBeLessThanOrEqual(32);
+    // Eight-binding history rows are the floor: 200 of them cannot fit in fewer than 16 statements.
+    expect(out.filter(s => s.sql.startsWith('INSERT INTO business_history(')).length).toBeGreaterThanOrEqual(16);
+    expect(Math.max(...out.map(statement => placeholders(statement.sql)))).toBeLessThanOrEqual(MAX_BINDINGS);
+  });
+
   it('collapses deletes of one table into a single keyed statement', () => {
     const statements: Statement[] = [];
     for (let i = 1; i <= 20; i++) statements.push(remove('satis_stok_hareketleri', i));
