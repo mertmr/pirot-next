@@ -14,6 +14,15 @@ interface Query {
   bindings: SqlValue[];
 }
 /**
+ * How much buffered-write JSON one delta binding may carry.
+ *
+ * Workerd rejects a statement whose bound parameters exceed `MAX_BINDINGS`, and it rejects an
+ * oversized statement outright, so a table's write set is split across as many delta bindings as
+ * this needs. The consequence is that a read's cost depends on how much the operation has buffered,
+ * which is why the count is reported to callers instead of being hidden in the rewrite.
+ */
+const DELTA_CHUNK_BYTES = 500000;
+/**
  * Read state that survives the replays of a single transaction attempt.
  *
  * `rows` caches whole result sets and `points` caches single-row lookups by primary key. Both are
@@ -106,6 +115,40 @@ export class D1TenantSql implements TenantSql {
     return JSON.stringify(this.spec(table).keys.map(k => row[k]));
   }
   /**
+   * Splits one table's buffered writes into the chunks `scoped` binds as a JSON document each.
+   *
+   * The split exists because one binding cannot carry an unbounded write set. Its size is therefore
+   * part of every read's parameter budget, which is why it is a method rather than inline in the
+   * rewrite, so the count a caller budgets against and the count actually bound cannot disagree.
+   */
+  private deltaChunks(table: string, selectedKind: EntityKind | null): Change[][] {
+    const changes = [...(this.changes.get(table)?.values() ?? [])].filter(change => !selectedKind || change.row.kind === selectedKind),
+      chunks: Change[][] = [];
+    let chunk: Change[] = [],
+      bytes = 0;
+    for (const change of changes) {
+      const size = JSON.stringify(change).length;
+      if (bytes + size > DELTA_CHUNK_BYTES && chunk.length) {
+        chunks.push(chunk);
+        chunk = [];
+        bytes = 0;
+      }
+      chunk.push(change);
+      bytes += size;
+    }
+    if (chunk.length) chunks.push(chunk);
+    return chunks;
+  }
+  /**
+   * How many leading bindings `scoped` prepends to a read of `table`.
+   *
+   * Counted over the unfiltered write set, which is the worst case for any single query because
+   * `scoped` may narrow it further, so a caller that budgets against this cannot overrun the limit.
+   */
+  deltaBindings(table: string): number {
+    return this.deltaChunks(table, null).length;
+  }
+  /**
    * Rewrites a tenant query so it reads the tenant's own rows plus the writes buffered so far.
    *
    * `withChanges` false produces the physical read alone. That variant is what makes a primary-key
@@ -127,38 +170,19 @@ export class D1TenantSql implements TenantSql {
         Object.hasOwn(ENTITY_TABLES, bindings[0])
           ? (bindings[0] as EntityKind)
           : null;
-      const delta = withChanges
-        ? [...(this.changes.get(table)?.values() ?? [])].filter(change => !selectedKind || change.row.kind === selectedKind)
-        : [];
+      const chunks = withChanges ? this.deltaChunks(table, selectedKind) : [];
       const base = selectedKind
         ? `SELECT '${selectedKind}' AS kind,id,data FROM ${ENTITY_TABLES[selectedKind]} WHERE tenant_id=${this.tenantId}`
         : `SELECT ${spec.columns.join(',')} FROM ${spec.physical} WHERE tenant_id=${this.tenantId}`;
       const materialized = table === 'entities' && occurrences > 1 ? 'MATERIALIZED ' : '';
 
-      if (!delta.length) {
+      if (!chunks.length) {
         ctes.push(`${table} AS ${materialized}(${base})`);
         continue;
       }
       const name = `delta_${table}`;
-      const chunks: string[] = [];
-      let chunk: Change[] = [],
-        bytes = 0;
-      for (const change of delta) {
-        const size = JSON.stringify(change).length;
-        if (bytes + size > 500000 && chunk.length) {
-          params.push(JSON.stringify(chunk));
-          chunks.push('SELECT value FROM json_each(?)');
-          chunk = [];
-          bytes = 0;
-        }
-        chunk.push(change);
-        bytes += size;
-      }
-      if (chunk.length) {
-        params.push(JSON.stringify(chunk));
-        chunks.push('SELECT value FROM json_each(?)');
-      }
-      ctes.push(`${name} AS MATERIALIZED (${chunks.join(' UNION ALL ')})`);
+      params.push(...chunks.map(chunk => JSON.stringify(chunk)));
+      ctes.push(`${name} AS MATERIALIZED (${chunks.map(() => 'SELECT value FROM json_each(?)').join(' UNION ALL ')})`);
       ctes.push(
         `${table} AS ${materialized}(SELECT ${spec.columns.map(c => `b.${c}`).join(',')} FROM (${base}) b WHERE NOT EXISTS (SELECT 1 FROM ${name} d WHERE ${spec.keys.map(k => `b.${k}=json_extract(d.value,'$.row.${k}')`).join(' AND ')}) UNION ALL SELECT ${spec.columns.map(c => `json_extract(value,'$.row.${c}') AS ${c}`).join(',')} FROM ${name} WHERE json_extract(value,'$.removed')=0)`,
       );

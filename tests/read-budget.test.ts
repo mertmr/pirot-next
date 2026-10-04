@@ -3,6 +3,7 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { build } from 'esbuild';
 import { object, list, integer, type JsonObject } from '../src/server/value';
 import { applyMigrations } from './migrations';
+import { MAX_BINDINGS } from '../src/server/d1-schema';
 
 /**
  * Cloudflare D1 on the Free plan allows 50 queries per Worker invocation. The tenant services plan a
@@ -27,11 +28,19 @@ const BUDGET = 50;
  * tables it touches without reopening the per-row shape.
  */
 const PER_LINE_SLACK = 6;
+/**
+ * How many distinct products the wide read case takes.
+ *
+ * Past `MAX_BINDINGS`, so it crosses the point where a relation read has to span several
+ * statements rather than sitting comfortably inside one.
+ */
+const WIDE_SALE_LINES = 99;
 
 const products: number[] = [];
 let runtime: Miniflare,
   token = '',
-  saleId = 0;
+  saleId = 0,
+  saleLines = 0;
 const password = 'Synthetic-fixture-password-42';
 
 async function call(path: string, method = 'GET', body?: unknown) {
@@ -60,6 +69,28 @@ const reset = async () => {
   expect((await call('/__test/read-stats', 'POST')).status).toBe(204);
 };
 const lines = (ids: number[], quantity: number) => ids.map(urunId => ({ urunId, miktar: quantity }));
+
+/** Creates products until `count` of them exist, and returns their ids. */
+async function ensureProducts(count: number, prefix = 'Budget'): Promise<number[]> {
+  while (products.length < count)
+    products.push(
+      integer(
+        (
+          await ok('/api/uruns', 'POST', {
+            urunAdi: `${prefix} product ${products.length}`,
+            birim: 'ADET',
+            stok: '1000',
+            stokSiniri: '0',
+            musteriFiyati: '10.00',
+            active: true,
+            satista: true,
+          })
+        ).id,
+        true,
+      ),
+    );
+  return products;
+}
 
 beforeAll(async () => {
   const bundled = await build({
@@ -115,23 +146,7 @@ afterAll(async () => {
 
 describe('D1 query budget', () => {
   it('keeps a multi-line sale well inside the budget and flat as the sale grows', async () => {
-    for (let i = 0; i < 20; i++)
-      products.push(
-        integer(
-          (
-            await ok('/api/uruns', 'POST', {
-              urunAdi: `Budget product ${i}`,
-              birim: 'ADET',
-              stok: '1000',
-              stokSiniri: '0',
-              musteriFiyati: '10.00',
-              active: true,
-              satista: true,
-            })
-          ).id,
-          true,
-        ),
-      );
+    await ensureProducts(20);
 
     // A warm-up sale pays for the per-tenant rows that the first request has to create, so the
     // numbers below describe the sale path itself rather than one-off setup.
@@ -148,7 +163,10 @@ describe('D1 query budget', () => {
     // The money is still derived from the lines, so a cheaper read path must not change the result.
     expect(small.toplamTutar).toBe('40.00');
     expect(large.toplamTutar).toBe('400.00');
+    // Recorded from the request that created it: later cases grow the shared product list, so the
+    // width of this sale cannot be read back off that array.
     saleId = integer(large.id, true);
+    saleLines = lines(products, 2).length;
 
     expect(largeCost).toBeLessThan(BUDGET);
     // Eighteen more lines may not cost eighteen more queries.
@@ -168,24 +186,7 @@ describe('D1 query budget', () => {
     // Enough lines that the line table cannot fit in one statement at the bound-parameter limit, so
     // the buffered rows have to span more than one. The sale is then read back to prove every line
     // was committed rather than silently left out of the batch.
-    const bulk = [...products];
-    for (let i = products.length; i < 40; i++)
-      bulk.push(
-        integer(
-          (
-            await ok('/api/uruns', 'POST', {
-              urunAdi: `Bulk product ${i}`,
-              birim: 'ADET',
-              stok: '1000',
-              stokSiniri: '0',
-              musteriFiyati: '10.00',
-              active: true,
-              satista: true,
-            })
-          ).id,
-          true,
-        ),
-      );
+    const bulk = [...(await ensureProducts(40, 'Bulk'))];
 
     await reset();
     const created = await ok('/api/satis', 'POST', { stokHareketleriLists: lines(bulk, 1) });
@@ -197,9 +198,38 @@ describe('D1 query budget', () => {
     expect(after).toBeLessThan(BUDGET);
   });
 
+  it('reads more relations than one statement can bind, without failing the command', async () => {
+    // Every relation read is an `IN (...)` list, and D1 rejects a statement past its parameter
+    // limit outright. How wide a list may be depends on what the tenant rewrite has already bound
+    // for the buffered writes, so a fixed allowance silently fails the whole command once a
+    // cooperative is one product wider than it — an opaque 500 on an ordinary large sale. This
+    // width sits on that boundary, and it is also the point where the command's total cost, reads
+    // and statements together, reaches the Free plan's per-invocation allowance.
+    const wide = await ensureProducts(WIDE_SALE_LINES, 'Wide');
+    const width = wide.length;
+    // Wider than one statement can bind, so the products are necessarily read in several
+    // `IN (...)` lists and each list has to be sized against what the rewrite already bound.
+    expect(width).toBeGreaterThan(MAX_BINDINGS - 2);
+
+    await reset();
+    const created = await ok('/api/satis', 'POST', { stokHareketleriLists: lines(wide, 1) });
+    const measured = await stats();
+
+    // Every line is committed, priced from the stored products, and readable back.
+    expect(integer(created.id, true)).toBeGreaterThan(0);
+    expect(created.toplamTutar).toBe((width * 10).toFixed(2));
+    const committed = list((await ok(`/api/satis/${integer(created.id, true)}`, 'GET')).stokHareketleriLists);
+    expect(committed).toHaveLength(width);
+
+    // Reading the products in several statements must not make the reads per-product. That is the
+    // property the relation batching exists for, and it is what this width has to preserve; the
+    // committed-statement side is bounded by `tests/write-compaction.test.ts` instead.
+    expect(integer(measured.reads, true)).toBeLessThan(BUDGET / 2);
+  });
+
   it('serves reads without writing, so a read never bumps the tenant revision', async () => {
     const fetched = await ok(`/api/satis/${saleId}`, 'GET');
-    expect(list(fetched.stokHareketleriLists)).toHaveLength(products.length);
+    expect(list(fetched.stokHareketleriLists)).toHaveLength(saleLines);
     await reset();
     await ok(`/api/satis/${saleId}`, 'GET');
     const after = await stats();

@@ -31,12 +31,25 @@ interface Node {
   refs: Map<string, Ref>;
   expanded: boolean;
 }
-/**
- * Relation reads are chunked so one oversized batch cannot exceed the bound-parameter limit. One
- * slot is reserved because the entity reads also bind the row kind alongside the id list.
- */
-const BATCH = MAX_BINDINGS - 1;
 export class TenantStore {
+  /**
+   * The widest `IN (...)` list a read of `table` may bind.
+   *
+   * Relation reads are chunked so one oversized batch cannot exceed the bound-parameter limit, but
+   * how large a chunk may be is not a constant. Every read is rewritten to merge the buffered writes
+   * for the table it reads, and that rewrite binds one parameter per chunk of buffered JSON ahead of
+   * anything the caller asked for. A fixed allowance is wrong in both directions: it forgets the row
+   * kind an entity read binds alongside its id list, and it forgets that a large write set spans
+   * several chunks. Either one turns into `too many SQL variables` at execution time, which fails the
+   * whole command for a cooperative one product wider than the guess.
+   *
+   * `own` is what the query binds besides the id list: one for the row kind on an entity read, none
+   * on a snapshot read. The floor keeps a caller's loop making progress if a write set ever
+   * approaches the limit on its own.
+   */
+  private chunkLimit(table: 'entities' | 'users_snapshot', own: number): number {
+    return Math.max(1, MAX_BINDINGS - own - this.sql.deltaBindings(table));
+  }
   /**
    * Rows this operation has already seen. A lookup that has been served once is served again from
    * here, which is what keeps a loop over related rows from spending a query per iteration.
@@ -166,13 +179,14 @@ export class TenantStore {
    */
   select(kind: EntityKind, ids: number[]): Map<number, Entity> {
     const wanted = [...new Set(ids.map(id => integer(id, true)))].sort((a, b) => a - b),
-      found = new Map<number, Entity>();
+      found = new Map<number, Entity>(),
+      limit = this.chunkLimit('entities', 1);
     const remember = (entity: Entity) => {
       this.seen.add(`${kind}:${entity.id}`);
       found.set(Number(entity.id), entity);
     };
-    for (let start = 0; start < wanted.length; start += BATCH) {
-      const chunk = wanted.slice(start, start + BATCH);
+    for (let start = 0; start < wanted.length; start += limit) {
+      const chunk = wanted.slice(start, start + limit);
       this.sql
         .exec<{ data: string }>(
           chunk.length === 1
@@ -242,11 +256,12 @@ export class TenantStore {
     if (!members.length) return;
     for (const member of members) if (member.tenantId !== tenantId) throw new BusinessError('forbidden', 403);
     const ids = members.map(m => integer(m.id, true)),
-      current = new Map<number, string>();
-    // Chunked for the same reason `batchRows` is: the member list is every user of the cooperative,
-    // so a large one would otherwise exceed the SQLite term limit and fail the whole request.
-    for (let start = 0; start < ids.length; start += BATCH) {
-      const chunk = ids.slice(start, start + BATCH);
+      current = new Map<number, string>(),
+      limit = this.chunkLimit('users_snapshot', 0);
+    // Chunked for the same reason `chunkLimit` exists: the member list is every user of the
+    // cooperative, and the rewrite binds its own parameters ahead of this list.
+    for (let start = 0; start < ids.length; start += limit) {
+      const chunk = ids.slice(start, start + limit);
       for (const row of this.sql
         .exec<{ id: number; data: string }>(`SELECT id,data FROM users_snapshot WHERE id IN (${chunk.map(() => '?').join(',')})`, ...chunk)
         .toArray())
@@ -293,9 +308,10 @@ export class TenantStore {
       // Chunked because the caller decides the page size; a sale's lines all carry that sale's
       // id, so a chunked scan still returns each sale's lines in `ORDER BY id`.
       const saleIds = roots.map(root => integer(root.value.id, true)),
-        lines: Entity[] = [];
-      for (let start = 0; start < saleIds.length; start += BATCH) {
-        const chunk = saleIds.slice(start, start + BATCH);
+        lines: Entity[] = [],
+        limit = this.chunkLimit('entities', 1);
+      for (let start = 0; start < saleIds.length; start += limit) {
+        const chunk = saleIds.slice(start, start + limit);
         lines.push(
           ...this.rows('satis-stok-hareketleris', `json_extract(data,'$.satis.id') IN (${chunk.map(() => '?').join(',')})`, chunk),
         );
@@ -331,9 +347,10 @@ export class TenantStore {
     return node;
   }
   private batchRows(table: 'entities' | 'users_snapshot', kind: string | null, ids: number[]): { id: number; data: string }[] {
-    const found: { id: number; data: string }[] = [];
-    for (let start = 0; start < ids.length; start += BATCH) {
-      const chunk = ids.slice(start, start + BATCH);
+    const found: { id: number; data: string }[] = [],
+      limit = this.chunkLimit(table, kind ? 1 : 0);
+    for (let start = 0; start < ids.length; start += limit) {
+      const chunk = ids.slice(start, start + limit);
       found.push(
         ...(chunk.length === 1
           ? this.sql.exec<{ id: number; data: string }>(
