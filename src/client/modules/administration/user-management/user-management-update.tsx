@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Button from 'react-bootstrap/Button';
 import Alert from 'react-bootstrap/Alert';
 import axios from 'axios';
@@ -16,6 +16,7 @@ import { useAppDispatch, useAppSelector } from 'app/config/store';
 import { languages, locales } from 'app/config/translation';
 
 import { createUser, getRoles, getUser, reset, updateUser } from './user-management.reducer';
+import { isEntityFormReadyFor } from 'app/shared/util/entity-form';
 
 export const UserManagementUpdate = () => {
   const dispatch = useAppDispatch();
@@ -58,9 +59,22 @@ export const UserManagementUpdate = () => {
   };
 
   const user = useAppSelector(state => state.userManagement.user);
-  const loading = useAppSelector(state => state.userManagement.loading);
   const updating = useAppSelector(state => state.userManagement.updating);
   const authorities = useAppSelector(state => state.userManagement.authorities);
+  // This route is keyed by login rather than by numeric id, but the hazard is the same one every
+  // other update form carries.
+  const formReady = isEntityFormReadyFor(user, 'login', login, isNew);
+  // ValidatedForm resets whenever the defaultValues reference changes, so an object built inline
+  // discards everything typed as soon as anything above re-renders. The redux record is stable
+  // between edits, so this is stable too, and the form keeps what the administrator typed.
+  const defaultValues = useMemo(
+    () => ({
+      ...user,
+      tenantId: user.tenantId ?? account.tenantId,
+      authorities: user.authorities?.length ? user.authorities : ['ROLE_USER'],
+    }),
+    [user, account.tenantId],
+  );
 
   return (
     <div>
@@ -73,8 +87,8 @@ export const UserManagementUpdate = () => {
       </Row>
       <Row className="justify-content-center">
         <Col md="8">
-          {loading ? (
-            <p>Loading...</p>
+          {!formReady ? (
+            <p>{translate('reports.common.loading')}</p>
           ) : (
             <>
               {error && <Alert variant="danger">{error}</Alert>}
@@ -83,14 +97,7 @@ export const UserManagementUpdate = () => {
                   <Translate contentKey="cloudflare.emailUnavailable" />
                 </Alert>
               )}
-              <ValidatedForm
-                onSubmit={saveUser}
-                defaultValues={{
-                  ...user,
-                  tenantId: user.tenantId ?? account.tenantId,
-                  authorities: user.authorities?.length ? user.authorities : ['ROLE_USER'],
-                }}
-              >
+              <ValidatedForm onSubmit={saveUser} defaultValues={defaultValues}>
                 <ValidatedField
                   type="select"
                   name="tenantId"

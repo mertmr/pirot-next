@@ -1,4 +1,14 @@
 import { ENTITY_SPECS, type EntityKind } from './entity-specs';
+
+/**
+ * The largest number of bound parameters one statement may carry.
+ *
+ * Workerd's SQLite caps bound parameters per statement at about 100, which is far below the 999 that
+ * a stock SQLite build allows and below the 32766 of a recent one, so this is measured against the
+ * runtime rather than assumed. Both the multi-row upserts and every `IN (...)` list in the store are
+ * chunked by it; exceeding it is a SQLITE_ERROR at execution time, not a graceful degradation.
+ */
+export const MAX_BINDINGS = 100;
 export const ENTITY_TABLES: Record<EntityKind, string> = {
   uruns: 'urun',
   ureticis: 'uretici',

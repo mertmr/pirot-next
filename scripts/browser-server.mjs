@@ -2,8 +2,8 @@ import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 // Only the dedicated disposable browser state is reset; normal local D1 remains intact.
+// This path must stay in sync with PIROT_E2E handling in vite.config.ts.
 const state = resolve('.wrangler/e2e');
-if (state !== resolve('.wrangler', 'e2e')) throw new Error('Unexpected browser state path');
 rmSync(state, { recursive: true, force: true });
 const setup = spawnSync('bunx', ['--no-install', 'wrangler', 'd1', 'migrations', 'apply', 'DIRECTORY', '--local', '--persist-to', state], {
   stdio: 'inherit',

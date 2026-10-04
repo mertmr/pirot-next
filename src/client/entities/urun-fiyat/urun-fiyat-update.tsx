@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import Button from 'react-bootstrap/Button';
 import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
@@ -13,6 +13,7 @@ import { getUsers } from 'app/modules/administration/user-management/user-manage
 import { convertDateTimeFromServer, convertDateTimeToServer, displayDefaultDateTime } from 'app/shared/util/date-utils';
 
 import { createEntity, getEntity, reset, updateEntity } from './urun-fiyat.reducer';
+import { isEntityFormReady } from 'app/shared/util/entity-form';
 
 export const UrunFiyatUpdate = () => {
   const dispatch = useAppDispatch();
@@ -25,7 +26,7 @@ export const UrunFiyatUpdate = () => {
   const users = useAppSelector(state => state.userManagement.users);
   const uruns = useAppSelector(state => state.urun.entities);
   const urunFiyatEntity = useAppSelector(state => state.urunFiyat.entity);
-  const loading = useAppSelector(state => state.urunFiyat.loading);
+  const formReady = isEntityFormReady(urunFiyatEntity, id, isNew);
   const updating = useAppSelector(state => state.urunFiyat.updating);
   const updateSuccess = useAppSelector(state => state.urunFiyat.updateSuccess);
 
@@ -70,17 +71,22 @@ export const UrunFiyatUpdate = () => {
     }
   };
 
-  const defaultValues = () =>
-    isNew
-      ? {
-          tarih: displayDefaultDateTime(),
-        }
-      : {
-          ...urunFiyatEntity,
-          tarih: convertDateTimeFromServer(urunFiyatEntity.tarih),
-          user: urunFiyatEntity?.user?.id,
-          urun: urunFiyatEntity?.urun?.id,
-        };
+  // Memoized identity matters: ValidatedForm resets the form whenever the
+  // defaultValues reference changes, so it must not be rebuilt on every render.
+  const defaultValues = useMemo(
+    () =>
+      isNew
+        ? {
+            tarih: displayDefaultDateTime(),
+          }
+        : {
+            ...urunFiyatEntity,
+            tarih: convertDateTimeFromServer(urunFiyatEntity.tarih),
+            user: urunFiyatEntity?.user?.id,
+            urun: urunFiyatEntity?.urun?.id,
+          },
+    [isNew, urunFiyatEntity],
+  );
 
   return (
     <div>
@@ -93,10 +99,10 @@ export const UrunFiyatUpdate = () => {
       </Row>
       <Row className="justify-content-center">
         <Col md="8">
-          {loading ? (
-            <p>Loading...</p>
+          {!formReady ? (
+            <p>{translate('reports.common.loading')}</p>
           ) : (
-            <ValidatedForm defaultValues={defaultValues()} onSubmit={saveEntity}>
+            <ValidatedForm defaultValues={defaultValues} onSubmit={saveEntity}>
               {!isNew && (
                 <ValidatedField
                   name="id"

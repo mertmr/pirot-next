@@ -5,7 +5,6 @@ export interface Env {
   PASSWORDS: DurableObjectNamespace<PasswordHasher>;
   DELIVERY: DurableObjectNamespace<JobDelivery>;
   DIRECTORY: D1Database;
-  FILES?: R2Bucket;
   JOBS?: Queue;
   EMAIL?: {
     send(message: {
@@ -22,7 +21,6 @@ export interface Env {
   PUBLIC_URL: string;
   EMAIL_FROM?: string;
   EMAIL_ENABLED?: string;
-  BUSINESS_STORAGE?: string;
   BOOTSTRAP_SECRET?: string;
 }
 export interface CurrentUser {

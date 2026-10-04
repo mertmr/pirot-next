@@ -4,6 +4,7 @@ import { useParams } from 'app/shared/routing/navigation';
 import axios from 'axios';
 
 import { IOrtakFatura, defaultValue } from 'app/shared/model/ortakfatura/ortak-fatura.model';
+import { translate } from 'app/shared/jhipster/language';
 
 export const OrtakFaturaDetail = () => {
   const { id } = useParams<'id'>();
@@ -24,15 +25,15 @@ export const OrtakFaturaDetail = () => {
 
   return (
     <div>
-      <h2 id="OrtakFaturalar-page-heading">Ortak Fatura Detayları</h2>
+      <h2 id="OrtakFaturalar-page-heading">{translate('reports.ortakFaturalar.detailTitle')}</h2>
       {detaylar.length > 0 ? (
         <Table responsive>
           <thead>
             <tr>
-              <th>Ürün Adı</th>
-              <th>Miktar</th>
-              <th>Birim Fiyat</th>
-              <th>Toplam Tutar</th>
+              <th>{translate('reports.ortakFaturalar.columnProduct')}</th>
+              <th>{translate('reports.common.columnQuantity')}</th>
+              <th>{translate('reports.ortakFaturalar.columnUnitPrice')}</th>
+              <th>{translate('reports.common.columnTotal')}</th>
             </tr>
           </thead>
           <tbody>
@@ -67,13 +68,13 @@ export const OrtakFaturaDetail = () => {
             <tr>
               <td />
               <td />
-              <td>Toplam</td>
+              <td>{translate('reports.ortakFaturalar.totalLabel')}</td>
               <td>{ortakFaturaDetaylar.tumToplam}</td>
             </tr>
           </tbody>
         </Table>
       ) : (
-        <div className="alert alert-warning">Kayıt bulunamadı.</div>
+        <div className="alert alert-warning">{translate('reports.common.notFound')}</div>
       )}
     </div>
   );

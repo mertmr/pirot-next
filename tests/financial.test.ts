@@ -10,6 +10,7 @@ import { object, list, integer, refId, type JsonObject, type Entity } from '../s
 import { manifest } from '../scripts/prepare-migration';
 import { ENTITY_SPECS, type EntityKind } from '../src/server/entity-specs';
 import { unzipSync, strFromU8 } from 'fflate';
+import { applyMigrations } from './migrations';
 let runtime: Miniflare,
   adminToken: string,
   sequence = 0;
@@ -63,6 +64,36 @@ const sale = (pid: number, quantity = 2, extra: JsonObject = {}) => ({
   stokHareketleriLists: [{ urunId: pid, miktar: quantity }],
   ...extra,
 });
+/** A fixture tenant whose user holds ROLE_ADMIN, for the endpoints that require it. */
+async function adminFixture() {
+  const n = ++sequence,
+    login = `admin${n}`,
+    tenant = await ok('/api/tenants', 'POST', { tenantName: `Admin fixture ${n}` }),
+    tid = integer(tenant.id, true);
+  await ok('/api/admin/users', 'POST', {
+    login,
+    email: `${login}@example.invalid`,
+    password,
+    tenantId: tid,
+    activated: true,
+    authorities: ['ROLE_ADMIN', 'ROLE_USER'],
+  });
+  const token = String((await ok('/api/authenticate', 'POST', { username: login, password }, '')).id_token);
+  await ok('/api/kasa-hareketleris', 'POST', { kasaMiktar: '1000.00', hareket: 'Synthetic opening balance' }, token);
+  const product = await ok(
+    '/api/uruns',
+    'POST',
+    { urunAdi: `Discount product ${n}`, birim: 'ADET', stok: '100', musteriFiyati: '10.00', active: true, satista: true },
+    token,
+  );
+  return { token, tid, login, pid: integer(product.id, true) };
+}
+const settings = (maxDiscountPercent: number) => ({
+  stockReportEmail: '',
+  stockReportEnabled: false,
+  maxDiscountPercent,
+});
+
 async function cash(token: string) {
   return (await rows('/api/kasa-hareketleris?sort=id,desc', token))[0].kasaMiktar;
 }
@@ -92,7 +123,6 @@ beforeAll(async () => {
         DELIVERY: { className: 'JobDelivery', useSQLite: true },
       },
       d1Databases: ['DIRECTORY'],
-      r2Buckets: ['FILES'],
       bindings: {
         AUTH_SECRET: 'synthetic-test-secret-with-at-least-32-characters',
         BOOTSTRAP_SECRET: 'synthetic-bootstrap-secret',
@@ -103,8 +133,7 @@ beforeAll(async () => {
     }),
   );
   const directory = await runtime.getD1Database('DIRECTORY');
-  for (const file of ['0001_directory.sql', '0002_outbox_queue.sql', '0003_business.sql'])
-    await directory.exec((await readFile(`migrations/${file}`, 'utf8')).replace(/\n/g, ' '));
+  await applyMigrations(directory);
   const bootstrap = await runtime.dispatchFetch('https://pirot.test/api/internal/bootstrap', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-bootstrap-secret': 'synthetic-bootstrap-secret' },
@@ -300,9 +329,79 @@ describe('Cloudflare D1 financial lifecycle', () => {
 });
 
 describe('Cloudflare accounts, reporting and migration', () => {
-  it('rejects oversized login passwords without leaking private RPC failures', async () => {
-    expect((await call('/api/authenticate', 'POST', { username: 'fixture-admin', password: 'x'.repeat(201) }, '')).status).toBe(401);
-    expect((await call('/api/authenticate', 'POST', { username: 'unknown-fixture', password: 'x'.repeat(201) }, '')).status).toBe(401);
+  it('treats an oversized login password exactly like any other wrong credential', async () => {
+    // The login path never reaches passwordValue(); the hasher rejects oversized
+    // input. Assert the observable contract: 401, identical for known and unknown
+    // accounts, and indistinguishable from an ordinary wrong password, so the
+    // response cannot be used to probe account existence or password policy.
+    const body = async (username: string, secret: string) => {
+      const response = await call('/api/authenticate', 'POST', { username, password: secret }, '');
+      expect(response.status).toBe(401);
+      return response.text();
+    };
+    const oversized = await body('fixture-admin', 'x'.repeat(201));
+    expect(oversized).toBe(await body('unknown-fixture', 'x'.repeat(201)));
+    expect(oversized).toBe(await body('fixture-admin', 'not-the-password'));
+  });
+  it('applies the discount ceiling from cooperative settings instead of a hardcoded tenant id', async () => {
+    const f = await adminFixture();
+
+    // The default ceiling is zero, so a discount is rejected for a fresh tenant.
+    expect((await call('/api/satis', 'POST', sale(f.pid, 2, { indirim: '10' }), f.token)).status).toBe(400);
+
+    // The ceiling is tenant data, so this cooperative can opt in.
+    await ok('/api/cooperative-settings', 'PUT', settings(25), f.token);
+    const created = await ok('/api/satis', 'POST', sale(f.pid, 2, { indirim: '10' }), f.token);
+    expect(created.toplamTutar).toBe('18.00');
+
+    // A discount above the configured ceiling stays rejected.
+    expect((await call('/api/satis', 'POST', sale(f.pid, 2, { indirim: '30' }), f.token)).status).toBe(400);
+
+    // The stored ceiling is readable, and an out-of-range ceiling is refused.
+    expect((await ok('/api/cooperative-settings', 'GET', undefined, f.token)).maxDiscountPercent).toBe('25');
+    expect((await call('/api/cooperative-settings', 'PUT', settings(101), f.token)).status).toBe(400);
+
+    // Lowering the ceiling revokes the allowance for subsequent sales.
+    await ok('/api/cooperative-settings', 'PUT', settings(0), f.token);
+    expect((await call('/api/satis', 'POST', sale(f.pid, 2, { indirim: '10' }), f.token)).status).toBe(400);
+  });
+  it('schedules the month-end stock report only in the Istanbul month-end window', async () => {
+    const f = await adminFixture();
+    const token = f.token;
+    await ok(
+      '/api/cooperative-settings',
+      'PUT',
+      { ...settings(0), stockReportEmail: 'reports@example.invalid', stockReportEnabled: true },
+      token,
+    );
+    await ok('/api/uruns', 'POST', { urunAdi: 'Reported product', birim: 'ADET', stok: '4', musteriFiyati: '12.50', active: true }, token);
+    const months = async () => (await rows('/api/report-files', token)).map(r => String(r.month));
+    const baseline = (await months()).length;
+    const cron = async (scheduledTime: string) => {
+      const response = await call('/__test/cron', 'POST', { scheduledTime });
+      expect(response.status, `cron ${scheduledTime}: ${await response.clone().text()}`).toBe(204);
+    };
+
+    // Mid-month the schedule must stay idle.
+    await cron('2026-10-15T20:00:00.000Z');
+    expect((await months()).length).toBe(baseline);
+
+    // 23:00 Istanbul on the last day of the month produces exactly one report.
+    await cron('2026-10-31T20:00:00.000Z');
+    expect(await months()).toEqual(['2026-10']);
+
+    // Repeating inside the same window is deduplicated by the monthly key.
+    await cron('2026-10-31T20:05:00.000Z');
+    expect((await months()).length).toBe(1);
+
+    // The following month produces its own report.
+    await cron('2026-11-30T20:00:00.000Z');
+    expect((await months()).sort()).toEqual(['2026-10', '2026-11']);
+
+    const [file] = await rows('/api/report-files', token);
+    const download = await call(`/api/report-files/${file.id}`, 'GET', undefined, token);
+    expect(download.status).toBe(200);
+    expect(download.headers.get('content-type')).toContain('spreadsheetml');
   });
   it('invalidates sessions after password/role/deactivation changes and never accepts account tenant ownership', async () => {
     const f = await fixture(),
@@ -587,8 +686,7 @@ describe('consistent Cloudflare business backup and restore', () => {
       }),
     );
     const restoredDb = await restored.getD1Database('DIRECTORY');
-    for (const file of ['0001_directory.sql', '0002_outbox_queue.sql', '0003_business.sql'])
-      await restoredDb.exec((await readFile(`migrations/${file}`, 'utf8')).replace(/\n/g, ' '));
+    await applyMigrations(restoredDb);
     await restoredDb.prepare('INSERT INTO tenants(id,tenant_name) VALUES (?,?)').bind(f.tid, 'Synthetic restore cooperative').run();
     const namespace = await restored.getDurableObjectNamespace('TENANTS'),
       stub = namespace.get(namespace.idFromName(`tenant:${f.tid}`)),

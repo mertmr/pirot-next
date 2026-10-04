@@ -33,11 +33,7 @@ import { Route as AppAccountActivateRouteImport } from './routes/_app.account.ac
 import { Route as AppAccountPasswordRouteImport } from './routes/_app.account.password'
 import { Route as AppAccountSettingsRouteImport } from './routes/_app.account.settings'
 import { Route as AppAdminAuditsRouteImport } from './routes/_app.admin.audits'
-import { Route as AppAdminConfigurationRouteImport } from './routes/_app.admin.configuration'
-import { Route as AppAdminDocsRouteImport } from './routes/_app.admin.docs'
 import { Route as AppAdminHealthRouteImport } from './routes/_app.admin.health'
-import { Route as AppAdminLogsRouteImport } from './routes/_app.admin.logs'
-import { Route as AppAdminMetricsRouteImport } from './routes/_app.admin.metrics'
 import { Route as AppAdminOperationsRouteImport } from './routes/_app.admin.operations'
 import { Route as AppAdminUserManagementRouteImport } from './routes/_app.admin.user-management'
 import { Route as AppBorcAlacakIdRouteImport } from './routes/_app.borc-alacak_.$id'
@@ -234,29 +230,9 @@ const AppAdminAuditsRoute = AppAdminAuditsRouteImport.update({
   path: '/admin/audits',
   getParentRoute: () => AppRoute,
 } as any)
-const AppAdminConfigurationRoute = AppAdminConfigurationRouteImport.update({
-  id: '/admin/configuration',
-  path: '/admin/configuration',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppAdminDocsRoute = AppAdminDocsRouteImport.update({
-  id: '/admin/docs',
-  path: '/admin/docs',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppAdminHealthRoute = AppAdminHealthRouteImport.update({
   id: '/admin/health',
   path: '/admin/health',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppAdminLogsRoute = AppAdminLogsRouteImport.update({
-  id: '/admin/logs',
-  path: '/admin/logs',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppAdminMetricsRoute = AppAdminMetricsRouteImport.update({
-  id: '/admin/metrics',
-  path: '/admin/metrics',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminOperationsRoute = AppAdminOperationsRouteImport.update({
@@ -683,11 +659,7 @@ export interface FileRoutesByFullPath {
   '/account/password': typeof AppAccountPasswordRoute
   '/account/settings': typeof AppAccountSettingsRoute
   '/admin/audits': typeof AppAdminAuditsRoute
-  '/admin/configuration': typeof AppAdminConfigurationRoute
-  '/admin/docs': typeof AppAdminDocsRoute
   '/admin/health': typeof AppAdminHealthRoute
-  '/admin/logs': typeof AppAdminLogsRoute
-  '/admin/metrics': typeof AppAdminMetricsRoute
   '/admin/operations': typeof AppAdminOperationsRoute
   '/admin/user-management': typeof AppAdminUserManagementRoute
   '/borc-alacak/$id': typeof AppBorcAlacakIdRoute
@@ -789,11 +761,7 @@ export interface FileRoutesByTo {
   '/account/password': typeof AppAccountPasswordRoute
   '/account/settings': typeof AppAccountSettingsRoute
   '/admin/audits': typeof AppAdminAuditsRoute
-  '/admin/configuration': typeof AppAdminConfigurationRoute
-  '/admin/docs': typeof AppAdminDocsRoute
   '/admin/health': typeof AppAdminHealthRoute
-  '/admin/logs': typeof AppAdminLogsRoute
-  '/admin/metrics': typeof AppAdminMetricsRoute
   '/admin/operations': typeof AppAdminOperationsRoute
   '/admin/user-management': typeof AppAdminUserManagementRoute
   '/borc-alacak/$id': typeof AppBorcAlacakIdRoute
@@ -897,11 +865,7 @@ export interface FileRoutesById {
   '/_app/account/password': typeof AppAccountPasswordRoute
   '/_app/account/settings': typeof AppAccountSettingsRoute
   '/_app/admin/audits': typeof AppAdminAuditsRoute
-  '/_app/admin/configuration': typeof AppAdminConfigurationRoute
-  '/_app/admin/docs': typeof AppAdminDocsRoute
   '/_app/admin/health': typeof AppAdminHealthRoute
-  '/_app/admin/logs': typeof AppAdminLogsRoute
-  '/_app/admin/metrics': typeof AppAdminMetricsRoute
   '/_app/admin/operations': typeof AppAdminOperationsRoute
   '/_app/admin/user-management': typeof AppAdminUserManagementRoute
   '/_app/borc-alacak_/$id': typeof AppBorcAlacakIdRoute
@@ -1005,11 +969,7 @@ export interface FileRouteTypes {
     | '/account/password'
     | '/account/settings'
     | '/admin/audits'
-    | '/admin/configuration'
-    | '/admin/docs'
     | '/admin/health'
-    | '/admin/logs'
-    | '/admin/metrics'
     | '/admin/operations'
     | '/admin/user-management'
     | '/borc-alacak/$id'
@@ -1111,11 +1071,7 @@ export interface FileRouteTypes {
     | '/account/password'
     | '/account/settings'
     | '/admin/audits'
-    | '/admin/configuration'
-    | '/admin/docs'
     | '/admin/health'
-    | '/admin/logs'
-    | '/admin/metrics'
     | '/admin/operations'
     | '/admin/user-management'
     | '/borc-alacak/$id'
@@ -1218,11 +1174,7 @@ export interface FileRouteTypes {
     | '/_app/account/password'
     | '/_app/account/settings'
     | '/_app/admin/audits'
-    | '/_app/admin/configuration'
-    | '/_app/admin/docs'
     | '/_app/admin/health'
-    | '/_app/admin/logs'
-    | '/_app/admin/metrics'
     | '/_app/admin/operations'
     | '/_app/admin/user-management'
     | '/_app/borc-alacak_/$id'
@@ -1475,39 +1427,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminAuditsRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/admin/configuration': {
-      id: '/_app/admin/configuration'
-      path: '/admin/configuration'
-      fullPath: '/admin/configuration'
-      preLoaderRoute: typeof AppAdminConfigurationRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/admin/docs': {
-      id: '/_app/admin/docs'
-      path: '/admin/docs'
-      fullPath: '/admin/docs'
-      preLoaderRoute: typeof AppAdminDocsRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/admin/health': {
       id: '/_app/admin/health'
       path: '/admin/health'
       fullPath: '/admin/health'
       preLoaderRoute: typeof AppAdminHealthRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/admin/logs': {
-      id: '/_app/admin/logs'
-      path: '/admin/logs'
-      fullPath: '/admin/logs'
-      preLoaderRoute: typeof AppAdminLogsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/admin/metrics': {
-      id: '/_app/admin/metrics'
-      path: '/admin/metrics'
-      fullPath: '/admin/metrics'
-      preLoaderRoute: typeof AppAdminMetricsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin/operations': {
@@ -2069,11 +1993,7 @@ interface AppRouteChildren {
   AppAccountPasswordRoute: typeof AppAccountPasswordRoute
   AppAccountSettingsRoute: typeof AppAccountSettingsRoute
   AppAdminAuditsRoute: typeof AppAdminAuditsRoute
-  AppAdminConfigurationRoute: typeof AppAdminConfigurationRoute
-  AppAdminDocsRoute: typeof AppAdminDocsRoute
   AppAdminHealthRoute: typeof AppAdminHealthRoute
-  AppAdminLogsRoute: typeof AppAdminLogsRoute
-  AppAdminMetricsRoute: typeof AppAdminMetricsRoute
   AppAdminOperationsRoute: typeof AppAdminOperationsRoute
   AppAdminUserManagementRoute: typeof AppAdminUserManagementRoute
   AppBorcAlacakIdRoute: typeof AppBorcAlacakIdRoute
@@ -2176,11 +2096,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAccountPasswordRoute: AppAccountPasswordRoute,
   AppAccountSettingsRoute: AppAccountSettingsRoute,
   AppAdminAuditsRoute: AppAdminAuditsRoute,
-  AppAdminConfigurationRoute: AppAdminConfigurationRoute,
-  AppAdminDocsRoute: AppAdminDocsRoute,
   AppAdminHealthRoute: AppAdminHealthRoute,
-  AppAdminLogsRoute: AppAdminLogsRoute,
-  AppAdminMetricsRoute: AppAdminMetricsRoute,
   AppAdminOperationsRoute: AppAdminOperationsRoute,
   AppAdminUserManagementRoute: AppAdminUserManagementRoute,
   AppBorcAlacakIdRoute: AppBorcAlacakIdRoute,

@@ -5,6 +5,7 @@ import axios from 'axios';
 
 import { IAylikSatislar } from 'app/shared/model/aylis-satislar.model';
 import { IUrun } from 'app/shared/model/urun.model';
+import { translate } from 'app/shared/jhipster/language';
 
 export const AylikSatislarsPage = () => {
   const [urunler, setUrunler] = useState<IUrun[]>([]);
@@ -28,11 +29,11 @@ export const AylikSatislarsPage = () => {
 
   return (
     <div>
-      <h2 id="aylikSatislars-page-heading">Aylık Satışlar</h2>
+      <h2 id="aylikSatislars-page-heading">{translate('reports.aylikSales.title')}</h2>
       <Form.Group className="mb-3">
-        <Form.Label>Satış raporunu görmek istediğiniz ürünü seçin</Form.Label>
+        <Form.Label>{translate('reports.aylikSales.productLabel')}</Form.Label>
         <Form.Select value={urunId} onChange={selectUrun}>
-          <option value="">Ürün seçiniz</option>
+          <option value="">{translate('reports.common.selectProduct')}</option>
           {urunler.map(item => (
             <option key={item.id} value={item.id}>
               {item.urunAdi}
@@ -44,8 +45,8 @@ export const AylikSatislarsPage = () => {
         <Table striped responsive>
           <thead>
             <tr>
-              <th>Satış Tarihi</th>
-              <th>Satış Miktarı</th>
+              <th>{translate('reports.common.columnSaleDate')}</th>
+              <th>{translate('reports.common.columnSaleQuantity')}</th>
             </tr>
           </thead>
           <tbody>
@@ -60,7 +61,7 @@ export const AylikSatislarsPage = () => {
           </tbody>
         </Table>
       ) : (
-        <div className="alert alert-warning">Kayıt bulunamadı.</div>
+        <div className="alert alert-warning">{translate('reports.common.notFound')}</div>
       )}
     </div>
   );

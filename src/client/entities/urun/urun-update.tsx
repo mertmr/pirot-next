@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import Button from 'react-bootstrap/Button';
 import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
@@ -14,6 +14,7 @@ import { Birim } from 'app/shared/model/enumerations/birim.model';
 import { UrunKategorisi } from 'app/shared/model/enumerations/urun-kategorisi.model';
 
 import { createEntity, getEntity, reset, updateEntity } from './urun.reducer';
+import { isEntityFormReady } from 'app/shared/util/entity-form';
 
 export const UrunUpdate = () => {
   const dispatch = useAppDispatch();
@@ -26,7 +27,7 @@ export const UrunUpdate = () => {
   const users = useAppSelector(state => state.userManagement.users);
   const kdvKategorisis = useAppSelector(state => state.kdvKategorisi.entities);
   const urunEntity = useAppSelector(state => state.urun.entity);
-  const loading = useAppSelector(state => state.urun.loading);
+  const formReady = isEntityFormReady(urunEntity, id, isNew);
   const updating = useAppSelector(state => state.urun.updating);
   const updateSuccess = useAppSelector(state => state.urun.updateSuccess);
   const birimValues = Object.keys(Birim);
@@ -74,16 +75,21 @@ export const UrunUpdate = () => {
     }
   };
 
-  const defaultValues = () =>
-    isNew
-      ? {}
-      : {
-          birim: 'ADET',
-          urunKategorisi: 'GIDA',
-          ...urunEntity,
-          urunSorumlusu: urunEntity?.urunSorumlusu?.id?.toString(),
-          kdvKategorisi: urunEntity?.kdvKategorisi?.id?.toString(),
-        };
+  // Memoized identity matters: ValidatedForm resets the form whenever the
+  // defaultValues reference changes, so it must not be rebuilt on every render.
+  const defaultValues = useMemo(
+    () =>
+      isNew
+        ? {}
+        : {
+            birim: 'ADET',
+            urunKategorisi: 'GIDA',
+            ...urunEntity,
+            urunSorumlusu: urunEntity?.urunSorumlusu?.id?.toString(),
+            kdvKategorisi: urunEntity?.kdvKategorisi?.id?.toString(),
+          },
+    [isNew, urunEntity],
+  );
 
   return (
     <div>
@@ -96,10 +102,10 @@ export const UrunUpdate = () => {
       </Row>
       <Row className="justify-content-center">
         <Col md="8">
-          {loading ? (
-            <p>Loading...</p>
+          {!formReady ? (
+            <p>{translate('reports.common.loading')}</p>
           ) : (
-            <ValidatedForm defaultValues={defaultValues()} onSubmit={saveEntity}>
+            <ValidatedForm defaultValues={defaultValues} onSubmit={saveEntity}>
               {!isNew && (
                 <ValidatedField
                   name="id"

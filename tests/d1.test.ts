@@ -1,16 +1,15 @@
 import { it, expect } from 'vitest';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
-import { readFile } from 'node:fs/promises';
 import { d1Transaction } from '../src/server/d1-store';
 import { D1Files } from '../src/server/files';
+import { applyMigrations } from './migrations';
 it('D1 retries competing revisions and rolls back every write on a late constraint failure', async () => {
   const runtime = new Miniflare(
     convertV4MiniflareOptions({ modules: true, script: 'export default {fetch(){return new Response("ok")}}', d1Databases: ['DIRECTORY'] }),
   );
   try {
     const db = await runtime.getD1Database('DIRECTORY');
-    for (const file of ['0001_directory.sql', '0002_outbox_queue.sql', '0003_business.sql'])
-      await db.exec((await readFile(`migrations/${file}`, 'utf8')).replace(/\n/g, ' '));
+    await applyMigrations(db);
     await db.prepare("INSERT INTO tenants(id,tenant_name) VALUES (1,'Synthetic D1 cooperative'),(2,'Other synthetic cooperative')").run();
     await db.prepare("INSERT INTO business_tenant_meta(tenant_id,key,value) VALUES (1,'counter','0')").run();
     let arrived = 0;

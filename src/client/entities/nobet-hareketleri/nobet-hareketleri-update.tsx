@@ -16,6 +16,7 @@ import { useAppDispatch, useAppSelector } from 'app/config/store';
 import { AcilisKapanis } from 'app/shared/model/enumerations/acilis-kapanis.model';
 
 import { createEntity, getEntity, getWorkflow, reset, updateEntity } from './nobet-hareketleri.reducer';
+import { isEntityFormReady } from 'app/shared/util/entity-form';
 
 const DENOMINATIONS: readonly { cents: number; label: string }[] = [
   { cents: 20000, label: '200' },
@@ -59,7 +60,7 @@ export const NobetHareketleriUpdate = () => {
   const isNew = id === undefined;
 
   const nobetHareketleriEntity = useAppSelector(state => state.nobetHareketleri.entity);
-  const loading = useAppSelector(state => state.nobetHareketleri.loading);
+  const formReady = isEntityFormReady(nobetHareketleriEntity, id, isNew);
   const updating = useAppSelector(state => state.nobetHareketleri.updating);
   const updateSuccess = useAppSelector(state => state.nobetHareketleri.updateSuccess);
   const saveError = useAppSelector(state => state.nobetHareketleri.saveError);
@@ -151,7 +152,7 @@ export const NobetHareketleriUpdate = () => {
         </Row>
         <Row className="justify-content-center">
           <Col md="8">
-            {loading ? (
+            {!formReady ? (
               <p role="status">
                 <Translate contentKey="koopApp.nobetHareketleri.loading">Yükleniyor…</Translate>
               </p>

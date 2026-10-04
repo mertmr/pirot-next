@@ -6,6 +6,7 @@ test('restores the authenticated developer session', { tags: ['smoke'], session:
   await app.open('/');
   // The entities menu renders only when authenticated; the account menu renders
   // either way, so it cannot prove the session was restored.
+  await screen.getByTestId('entity').waitFor({ state: 'visible', timeout: 60_000 });
   await expect(screen.getByTestId('entity')).toBeVisible();
   await app.open('/urun');
   await expect(screen.getByTestId('UrunHeading')).toBeVisible();

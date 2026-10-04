@@ -23,6 +23,7 @@
     "invalidstock": "Stok bilgisi geçersiz.",
     "invalidpayment": "Ödeme yöntemi geçersiz.",
     "invaliddiscount": "Bu kooperatif için indirim geçersiz.",
+    "discountlimit": "Bu kooperatifin indirim sınırı aşıldı. Yönetici, Yönetim → Cloudflare işlemleri ekranından en yüksek indirim oranını girebilir.",
     "invalidtransition": "Nöbet durumu değişti. Lütfen yenileyin.",
     "cashrequired": "Sistem kasası bulunamadı.",
     "notesrequired": "Kasa farkı için açıklama gerekli.",

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import Button from 'react-bootstrap/Button';
 import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
@@ -11,6 +11,7 @@ import { useAppDispatch, useAppSelector } from 'app/config/store';
 import { getEntities as getUruns } from 'app/entities/urun/urun.reducer';
 
 import { createEntity, getEntity, reset, updateEntity } from './urun-fiyat-hesap.reducer';
+import { isEntityFormReady } from 'app/shared/util/entity-form';
 
 export const UrunFiyatHesapUpdate = () => {
   const dispatch = useAppDispatch();
@@ -22,7 +23,7 @@ export const UrunFiyatHesapUpdate = () => {
 
   const uruns = useAppSelector(state => state.urun.entities);
   const urunFiyatHesapEntity = useAppSelector(state => state.urunFiyatHesap.entity);
-  const loading = useAppSelector(state => state.urunFiyatHesap.loading);
+  const formReady = isEntityFormReady(urunFiyatHesapEntity, id, isNew);
   const updating = useAppSelector(state => state.urunFiyatHesap.updating);
   const updateSuccess = useAppSelector(state => state.urunFiyatHesap.updateSuccess);
 
@@ -82,13 +83,18 @@ export const UrunFiyatHesapUpdate = () => {
     }
   };
 
-  const defaultValues = () =>
-    isNew
-      ? {}
-      : {
-          ...urunFiyatHesapEntity,
-          urun: urunFiyatHesapEntity?.urun?.id,
-        };
+  // Memoized identity matters: ValidatedForm resets the form whenever the
+  // defaultValues reference changes, so it must not be rebuilt on every render.
+  const defaultValues = useMemo(
+    () =>
+      isNew
+        ? {}
+        : {
+            ...urunFiyatHesapEntity,
+            urun: urunFiyatHesapEntity?.urun?.id,
+          },
+    [isNew, urunFiyatHesapEntity],
+  );
 
   return (
     <div>
@@ -101,10 +107,10 @@ export const UrunFiyatHesapUpdate = () => {
       </Row>
       <Row className="justify-content-center">
         <Col md="8">
-          {loading ? (
-            <p>Loading...</p>
+          {!formReady ? (
+            <p>{translate('reports.common.loading')}</p>
           ) : (
-            <ValidatedForm defaultValues={defaultValues()} onSubmit={saveEntity}>
+            <ValidatedForm defaultValues={defaultValues} onSubmit={saveEntity}>
               {!isNew && (
                 <ValidatedField
                   name="id"

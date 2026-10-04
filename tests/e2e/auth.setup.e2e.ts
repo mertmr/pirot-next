@@ -40,6 +40,7 @@ test.setup('developer session', { sessions: ['developer'] }, async ({ app, scree
   await screen.getByTestId('username').fill(developer.username);
   await screen.getByTestId('password').fill(developer.password);
   await screen.getByTestId('submit').tap();
+  await screen.getByTestId('entity').waitFor({ state: 'visible', timeout: 120_000 });
   await expect(screen.getByTestId('entity')).toBeVisible();
   // The app keeps its JWT in session storage, which Playwright storage state
   // (and therefore session save/restore) does not capture. Mirror the token

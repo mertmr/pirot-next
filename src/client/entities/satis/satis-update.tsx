@@ -1,4 +1,5 @@
 import { SaleDecimal, quarterMoney as roundMoney, calculateSaleLine as calculateLine } from './satis-totals';
+import { isEntityFormReady } from 'app/shared/util/entity-form';
 import { formatDecimal } from 'app/shared/util/decimal-format';
 import './satis-update.scss';
 
@@ -84,7 +85,7 @@ export const SatisUpdate = () => {
   const { id } = useParams<'id'>();
   const isNew = id === undefined;
   const sale: ISatis = useAppSelector(state => state.satis.entity);
-  const loading = useAppSelector(state => state.satis.loading);
+  const formReady = isEntityFormReady(sale, id, isNew);
   const updating = useAppSelector(state => state.satis.updating);
   const updateSuccess = useAppSelector(state => state.satis.updateSuccess);
   const updateError = useAppSelector(state => state.satis.errorMessage);
@@ -452,11 +453,7 @@ export const SatisUpdate = () => {
         </Alert>
       )}
 
-      {loading && !isNew ? (
-        <div className="satis-loading">
-          <Spinner animation="border" />
-        </div>
-      ) : (
+      {formReady ? (
         <Form onSubmit={save}>
           <CorrectionFields type="satis" id={id} onChange={setDuzeltme} onBlocked={setCorrectionBlocked} onClosed={setClosed} />
           <Row className="g-4 align-items-start">
@@ -712,6 +709,10 @@ export const SatisUpdate = () => {
             </Button>
           </div>
         </Form>
+      ) : (
+        <div className="satis-loading">
+          <Spinner animation="border" />
+        </div>
       )}
     </div>
   );

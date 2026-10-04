@@ -20,13 +20,8 @@
         "kasaHareketleri": "Kasa Hareketleri",
         "nobetHareketleri": "Nöbet Hareketleri",
         "kisiler": "Kişiler",
-        "satis": "Satış",
-        "urun": "Ürün",
-        "nobetHareketleri": "Nöbet Hareketleri",
-        "stokGirisi": "Stok Girişi",
         "urunFiyatHesap": "Ürün Fiyat Hesap",
-        "urunFiyatHesap": "Urun Fiyat Hesap",
-        "ureticiOdemeleri": "Uretici Odemeleri",
+        "ureticiOdemeleri": "Üretici Ödemeleri",
         "jhipster-needle-menu-add-entry": "JHipster will add additional entities here (do not translate!)"
       },
       "reports": {

@@ -1,0 +1,56 @@
+{
+  "reports": {
+    "common": {
+      "notFound": "Kayıt bulunamadı.",
+      "selectProduct": "Ürün seçiniz",
+      "selectDate": "Tarih seçiniz",
+      "loading": "Yükleniyor...",
+      "columnTotal": "Toplam Tutar",
+      "columnDate": "Tarih",
+      "columnQuantity": "Miktar",
+      "columnSaleDate": "Satış Tarihi",
+      "columnSaleQuantity": "Satış Miktarı"
+    },
+    "ciro": {
+      "title": "Ciro",
+      "detailTitle": "Ciro Günlük Detayı",
+      "startDate": "Başlangıç Tarihi",
+      "endDate": "Bitiş Tarihi",
+      "columnStaff": "Nöbetçi",
+      "columnCard": "Kartlı Satış",
+      "columnCash": "Nakit Satış"
+    },
+    "aylikSales": {
+      "title": "Aylık Satışlar",
+      "productLabel": "Satış raporunu görmek istediğiniz ürünü seçin"
+    },
+    "aylikSalesCost": {
+      "title": "Aylık Satışlar",
+      "columnProducts": "Ürünler"
+    },
+    "ortakFaturalar": {
+      "title": "Ortak Faturalar",
+      "detailTitle": "Ortak Fatura Detayları",
+      "dateLabel": "Tarih",
+      "columnProduct": "Ürün Adı",
+      "columnUnitPrice": "Birim Fiyat",
+      "totalLabel": "Toplam"
+    },
+    "tukenme": {
+      "title": "Ürün Tükenme Hızı Raporu",
+      "productLabel": "Tükenme hızını öğrenmek istediğiniz ürünü seçin",
+      "stockEntryLabel": "Tükenme hızını öğrenmek istediğiniz stok girişi periyodunu seçin",
+      "selectStockEntry": "Stok girişi seçiniz",
+      "monthlyRate": "Aylık Tükenme Hızı: {{rate}}",
+      "weeklyRate": "Haftalık Tükenme Hızı: {{rate}}",
+      "wasteRatio": "Firenin Girilen Stoğa Oranı: %{{ratio}}",
+      "dataSpan": "Rapor Veri Ölçek Süresi: {{days}} gün"
+    }
+  },
+  "home": {
+    "cardCash": "Kasa",
+    "cardDailyRevenue": "Günlük Ciro",
+    "cardCardSales": "Kartlı Satış",
+    "cardCashSales": "Nakit Satış"
+  }
+}

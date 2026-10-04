@@ -90,7 +90,6 @@ export class D1Files {
     };
   }
 }
-export function files(env: { DIRECTORY: D1Database; FILES?: R2Bucket; BUSINESS_STORAGE?: string }): D1Files | R2Bucket {
-  if (env.BUSINESS_STORAGE === 'durable' && env.FILES) return env.FILES;
+export function files(env: { DIRECTORY: D1Database }): D1Files {
   return new D1Files(env.DIRECTORY);
 }

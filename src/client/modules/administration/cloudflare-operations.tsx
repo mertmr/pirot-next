@@ -17,10 +17,11 @@ interface Operations {
 interface Settings {
   stockReportEmail: string;
   stockReportEnabled: boolean;
+  maxDiscountPercent: string;
 }
 export default function CloudflareOperations() {
   const [operations, setOperations] = useState<Operations | null>(null),
-    [settings, setSettings] = useState<Settings>({ stockReportEmail: '', stockReportEnabled: false });
+    [settings, setSettings] = useState<Settings>({ stockReportEmail: '', stockReportEnabled: false, maxDiscountPercent: '0' });
   const [tenants, setTenants] = useState<{ id: number; tenantName: string }[]>([]),
     [name, setName] = useState(''),
     [error, setError] = useState(''),
@@ -156,6 +157,22 @@ export default function CloudflareOperations() {
           checked={settings.stockReportEnabled}
           onChange={e => setSettings({ ...settings, stockReportEnabled: e.target.checked })}
         />
+        <Form.Group className="mt-3">
+          <Form.Label>
+            <Translate contentKey="cloudflare.maxDiscountPercent" />
+          </Form.Label>
+          <Form.Control
+            type="number"
+            min={0}
+            max={100}
+            step={1}
+            value={settings.maxDiscountPercent}
+            onChange={e => setSettings({ ...settings, maxDiscountPercent: e.target.value })}
+          />
+          <Form.Text>
+            <Translate contentKey="cloudflare.maxDiscountPercentHelp" />
+          </Form.Text>
+        </Form.Group>
         <Button type="submit" disabled={saving}>
           <Translate contentKey="entity.action.save" />
         </Button>
