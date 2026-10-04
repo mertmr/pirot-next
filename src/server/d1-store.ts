@@ -23,6 +23,13 @@ interface Query {
  */
 const DELTA_CHUNK_BYTES = 500000;
 /**
+ * How many removed history ids one audit-id allocation may exclude from the physical maximum.
+ *
+ * Half the statement's parameter limit, leaving room for the rewrite's own bindings on top of it.
+ * Past this the exclusions are dropped, which over-allocates rather than colliding.
+ */
+const MAX_HISTORY_EXCLUSIONS = MAX_BINDINGS / 2;
+/**
  * Read state that survives the replays of a single transaction attempt.
  *
  * `rows` caches whole result sets and `points` caches single-row lookups by primary key. Both are
@@ -254,6 +261,13 @@ export class D1TenantSql implements TenantSql {
    * The physical maximum is fetched at most once per transaction attempt and rows buffered here are
    * added on top. A removal recorded in this operation can invalidate that maximum, so the cache key
    * carries the removed ids.
+   *
+   * Those ids were bound one by one, with no bound on how many, which is the same unbounded
+   * parameter list that made relation reads fail past a statement's limit. Excluding them keeps the
+   * allocated id clear of rows being deleted, but only in the direction that matters: history ids
+   * have to be unique and increasing, and a gap costs nothing. So past a safe number of exclusions
+   * the maximum is taken as it stands instead, which can only hand out a higher id than strictly
+   * necessary and can never collide. The audit trail is append-only, so a gap in it is invisible.
    */
   private nextHistoryId(): number {
     const changes = [...(this.changes.get('history')?.values() ?? [])],
@@ -261,10 +275,11 @@ export class D1TenantSql implements TenantSql {
         .filter(change => change.removed)
         .map(change => Number(change.row.id))
         .sort((a, b) => a - b),
-      signature = JSON.stringify(removed);
+      excluded = removed.length <= MAX_HISTORY_EXCLUSIONS ? removed : [],
+      signature = JSON.stringify([excluded.length === removed.length, excluded]);
     if (!this.cache.historyBase || this.cache.historyBase.signature !== signature) {
-      const sql = `SELECT coalesce(max(id),0) AS id FROM history${removed.length ? ` WHERE id NOT IN (${removed.map(() => '?').join(',')})` : ''}`;
-      throw new ReadRequired(`history|${signature}`, this.scoped(sql, removed, false), rows => {
+      const sql = `SELECT coalesce(max(id),0) AS id FROM history${excluded.length ? ` WHERE id NOT IN (${excluded.map(() => '?').join(',')})` : ''}`;
+      throw new ReadRequired(`history|${signature}`, this.scoped(sql, excluded, false), rows => {
         this.cache.historyBase = { signature, value: Number(rows[0]?.id ?? 0) };
       });
     }
