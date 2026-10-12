@@ -1,3 +1,4 @@
+import { IBorcAlacak } from 'app/shared/model/borc-alacak.model';
 import { IKisiler } from 'app/shared/model/kisiler.model';
 import { ISatisStokHareketleri } from 'app/shared/model/satis-stok-hareketleri.model';
 import { IUser } from 'app/shared/model/user.model';
@@ -18,6 +19,7 @@ export interface ISatis {
   odendi?: boolean | null;
   indirim?: number | string | null;
   stokHareketleriLists?: ISatisStokHareketleri[] | null;
+  borcAlacak?: IBorcAlacak | null;
   user?: IUser | null;
   kisi?: IKisiler | null;
 }

@@ -61,6 +61,18 @@ export const SatisDetail = () => {
             <Translate contentKey="koopApp.satis.user">User</Translate>
           </dt>
           <dd>{satisEntity.user ? satisEntity.user.login : ''}</dd>
+          {satisEntity.borcAlacak?.notlar ? (
+            <>
+              <dt>
+                <span id="odemeNotu">
+                  <Translate contentKey="koopApp.satis.odemeNotu">Ödeme notu</Translate>
+                </span>
+              </dt>
+              <dd>
+                {satisEntity.borcAlacak.notlar} <Link to={`/borc-alacak/${satisEntity.borcAlacak.id}`}>#{satisEntity.borcAlacak.id}</Link>
+              </dd>
+            </>
+          ) : null}
         </dl>
         <div className="table-responsive">
           {satisEntity.stokHareketleriLists && satisEntity.stokHareketleriLists.length > 0 ? (

@@ -100,6 +100,40 @@ test('deleting a deferred sale through the dialog removes its debt and restores 
   expect(await cash(request)).toBeCloseTo(cash0, 2);
 });
 
+test('a deferred sale shows its payment note on the sale detail', async ({ page, request }) => {
+  const name = uniqueName('E2E note');
+  const note = `${name} ödeyecek`;
+  const product = await createProduct(request, { name, stock: '10', price: '12.50' });
+  const saleId = (await createSale(request, product.id, 1, { deferred: true, note })).id;
+  try {
+    const debts = await debtsForSale(request, saleId);
+    expect(debts).toHaveLength(1);
+    await signIn(page, request);
+    await page.goto(`/satis/${saleId}`, { waitUntil: 'domcontentloaded' });
+
+    // The persisted debt note is visible on the sale detail with a link to the debt record.
+    await expect(page.locator('#odemeNotu')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(note)).toBeVisible();
+    await expect(page.getByRole('link', { name: `#${debts[0].id}` })).toHaveAttribute('href', `/borc-alacak/${debts[0].id}`);
+  } finally {
+    await remove(request, 'satis', saleId);
+    await remove(request, 'uruns', product.id);
+  }
+});
+
+test('the product list renders no untranslated placeholders for unset enum fields', async ({ page, request }) => {
+  const name = uniqueName('E2E uncategorized');
+  const product = await createProduct(request, { name, stock: '10', price: '12.50' });
+  try {
+    await signIn(page, request);
+    await page.goto('/urun', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(name)).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('text=translation-not-found')).toHaveCount(0);
+  } finally {
+    await remove(request, 'uruns', product.id);
+  }
+});
+
 test('the first quantity of a low-stock GRAM product clamps to the available stock', async ({ page, request }) => {
   const name = uniqueName('E2E gram');
   const product = await createProduct(request, { name, stock: '25', price: '100.00', unit: 'GRAM' });

@@ -154,6 +154,8 @@ describe('Cloudflare D1 financial lifecycle', () => {
     const deferred = await ok('/api/satis?paymentNote=Synthetic%20debt', 'POST', sale(f.pid, 2, { sonraOdeme: true }), f.token);
     expect(deferred.odendi).toBe(false);
     expect(await cash(f.token)).toBe('100.00');
+    const deferredDetail = await ok(`/api/satis/${deferred.id}`, 'GET', undefined, f.token);
+    expect(object(deferredDetail.borcAlacak).notlar).toBe('Synthetic debt');
     const key = crypto.randomUUID();
     const paid = await ok(`/api/satis/${deferred.id}/collect-payment?paymentMethod=NAKIT`, 'POST', {}, f.token, key);
     expect(paid.odendi).toBe(true);

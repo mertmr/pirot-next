@@ -21,6 +21,7 @@
       "toplamTutar": "Toplam Tutar",
       "ortagaSatis": "Ortaga Satis",
       "kartliSatis": "Kartli Satis",
+      "odemeNotu": "Payment note",
       "sonraOdeme": "Collect Payment Later",
       "sonraOdemeStatus": "{status}",
       "odendi": "Paid",

@@ -100,7 +100,7 @@ export async function createSale(
   request: APIRequestContext,
   productId: number,
   quantity: number,
-  options: { id?: number; card?: boolean; deferred?: boolean; discount?: number; token?: string } = {},
+  options: { id?: number; card?: boolean; deferred?: boolean; discount?: number; note?: string; token?: string } = {},
 ): Promise<Sale> {
   const data: Record<string, unknown> = {
     tarih: new Date().toISOString(),
@@ -111,7 +111,8 @@ export async function createSale(
   };
   if (options.id) data.id = options.id;
   if (options.discount) data.indirim = options.discount;
-  return api(request, 'satis', { method: 'POST', data, token: options.token });
+  const query = options.note ? `?paymentNote=${encodeURIComponent(options.note)}` : '';
+  return api(request, `satis${query}`, { method: 'POST', data, token: options.token });
 }
 
 export async function sale(request: APIRequestContext, saleId: number, token?: string): Promise<Sale> {

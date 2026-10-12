@@ -182,12 +182,19 @@ export class TenantStore {
         if (relation) result[field] = this.hydrate(definition.target as EntityKind, relation, depth + 1);
       }
     }
-    if (kind === 'satis')
+    if (kind === 'satis') {
       result.stokHareketleriLists = this.matching('satis-stok-hareketleris', 'satis.id', result.id).map(l => {
         const line = this.hydrate('satis-stok-hareketleris', l, 1);
         delete line.satis;
         return line;
       });
+      const debt = this.matching('borc-alacaks', 'satis.id', result.id)[0];
+      if (debt) {
+        const hydratedDebt = this.hydrate('borc-alacaks', debt, 1);
+        delete hydratedDebt.satis;
+        result.borcAlacak = hydratedDebt;
+      }
+    }
     return result;
   }
 }
