@@ -170,12 +170,12 @@ export const Urun = () => {
                   <td>{urun.stokSiniri}</td>
                   <td>{urun.musteriFiyati}</td>
                   <td>
-                    <Translate contentKey={`koopApp.Birim.${urun.birim}`} />
+                    <Translate contentKey={`koopApp.Birim.${urun.birim ?? 'null'}`} />
                   </td>
                   <td>{urun.dayanismaUrunu ? 'true' : 'false'}</td>
                   <td>{urun.satista ? 'true' : 'false'}</td>
                   <td>
-                    <Translate contentKey={`koopApp.UrunKategorisi.${urun.urunKategorisi}`} />
+                    <Translate contentKey={`koopApp.UrunKategorisi.${urun.urunKategorisi ?? 'null'}`} />
                   </td>
                   <td>{urun.active ? 'true' : 'false'}</td>
                   <td>{urun.urunSorumlusu ? urun.urunSorumlusu.login : ''}</td>
